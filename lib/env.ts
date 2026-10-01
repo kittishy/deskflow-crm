@@ -32,6 +32,14 @@ const required = (name: string) =>
     ? z.string().min(1, `${name} é obrigatória em produção`)
     : z.string().default("");
 
+/**
+ * CRM básico na Vercel roda sem os processos persistentes do pacote VPS.
+ * Recursos que dependem de worker/WAHA/SQL direto ficam indisponíveis até suas
+ * credenciais serem configuradas; não devem derrubar login, funil e contatos.
+ */
+const requiredForPersistentInstall = (name: string) =>
+  process.env.VERCEL === "1" ? z.string().optional().default("") : required(name);
+
 const requiredAlways = (name: string) => z.string().min(1, `${name} é obrigatória`);
 
 /**
@@ -152,7 +160,7 @@ const schema = z.object({
 
   // Postgres direto do Supabase (Settings → Database) — só as rotas de skills
   // instaláveis (import/install) usam `pg` cru (mesmo pool do agent-engine).
-  SUPABASE_DB_URL: required("SUPABASE_DB_URL"),
+  SUPABASE_DB_URL: requiredForPersistentInstall("SUPABASE_DB_URL"),
   /**
    * A conexão de DDL do KIT (install.sh/update.sh/backup.sh), não do app.
    * O `docker-compose.prod.yml` entrega o `.env` inteiro ao app, ao worker e
@@ -169,9 +177,9 @@ const schema = z.object({
   SUPABASE_DB_ADMIN_URL: z.string().optional().default(""),
 
   // WAHA
-  WAHA_API_BASE_URL: required("WAHA_API_BASE_URL"),
-  WAHA_API_KEY: required("WAHA_API_KEY"),
-  WAHA_WEBHOOK_BASE_URL: required("WAHA_WEBHOOK_BASE_URL"),
+  WAHA_API_BASE_URL: requiredForPersistentInstall("WAHA_API_BASE_URL"),
+  WAHA_API_KEY: requiredForPersistentInstall("WAHA_API_KEY"),
+  WAHA_WEBHOOK_BASE_URL: requiredForPersistentInstall("WAHA_WEBHOOK_BASE_URL"),
   // Segredo com que o WAHA assina os webhooks. O compose já o entrega ao
   // contêiner do WAHA; o app precisa dele para CONFERIR a assinatura — e não o
   // declarava aqui, então nunca teve como verificar nada.
@@ -206,8 +214,8 @@ const schema = z.object({
   DATAFY_ENABLED: z.string().optional().default(""),
 
   // Upstash Redis
-  UPSTASH_REDIS_REST_URL: required("UPSTASH_REDIS_REST_URL"),
-  UPSTASH_REDIS_REST_TOKEN: required("UPSTASH_REDIS_REST_TOKEN"),
+  UPSTASH_REDIS_REST_URL: requiredForPersistentInstall("UPSTASH_REDIS_REST_URL"),
+  UPSTASH_REDIS_REST_TOKEN: requiredForPersistentInstall("UPSTASH_REDIS_REST_TOKEN"),
 
   // AI providers — env-gated. Worker no-ops with skip="ai_gateway_key_missing"
   // when AI_GATEWAY_API_KEY is absent, so production boot must not be fatal.
