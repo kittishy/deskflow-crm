@@ -1731,7 +1731,7 @@ jobs:
       - name: Restaurar os .deb do browser
         if: runner.environment == 'github-hosted'
         id: debs-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/playwright-apt/*.deb
           key: ${{ steps.debs.outputs.prefixo }}${{ steps.debs.outputs.imagem }}
@@ -1745,7 +1745,7 @@ jobs:
       # mais precisa do cache na rodada seguinte — nunca gravaria.
       - name: Guardar os .deb do browser
         if: runner.environment == 'github-hosted' && steps.debs-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/playwright-apt/*.deb
           key: ${{ steps.debs.outputs.prefixo }}${{ steps.debs.outputs.imagem }}
