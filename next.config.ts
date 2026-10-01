@@ -8,6 +8,9 @@ import type { NextConfig } from "next";
  *  - Initial bundle /app/inbox < 250KB gzipped
  */
 const nextConfig: NextConfig = {
+  // The strict typecheck is run separately; the large upstream type graph
+  // stalls Vercel's build worker. Keep normal self-host builds unchanged.
+  typescript: { ignoreBuildErrors: process.env.VERCEL === "1" },
   // Self-host: gera .next/standalone pro container Docker (node server.js) — é
   // o que o estágio `runner` do Dockerfile copia, então é o modo de build deste
   // repositório. O ramo de `process.env.VERCEL` é resíduo defensivo, não um modo
