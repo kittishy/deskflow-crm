@@ -9,6 +9,7 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/login(\/.*)?$/,
   /^\/signup$/,
   /^\/auth\/confirm$/,
+  /^\/auth\/email$/,
   // A VOLTA DA ENTRADA COM GOOGLE (issue #1388). Quem chega aqui é o NAVEGADOR
   // que o Google devolveu, via 302 do GoTrue — navegação vinda de outro site,
   // onde o cookie de sessão (`sameSite: "strict"`) não viaja por definição.
