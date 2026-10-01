@@ -139,7 +139,8 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  if (type === "recovery") {
+  // Provider invitations authenticate the new account but do not set a password.
+  if (type === "recovery" || type === "invite") {
     return redirectTo("/login/reset");
   }
 

@@ -18,8 +18,9 @@ export function useTenantHealth(id: string) {
   const query = useQuery({
     queryKey,
     queryFn: () => apiClient.get<HealthApiResponse>(`/api/v1/admin/tenants/${id}/health`),
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    refetchIntervalInBackground: false,
     enabled: !!id,
   });
 

@@ -83,6 +83,15 @@ describe("GET /auth/confirm", () => {
     );
   }
 
+  it("convite do provedor leva a definir senha mesmo com cadastro fechado", async () => {
+    comSupabase({ verifyOtp: { data: { user: USUARIO }, error: null }, getUser: { data: { user: null } } });
+    vi.mocked(decidirConviteDoSignup).mockReturnValue({ tipo: "provisionar" });
+    vi.mocked(modoDeCadastro).mockResolvedValue("so_convite");
+    const { GET } = await import("./route");
+    expect(destino(await GET(requisicao("type=invite&token_hash=abc")))).toBe("/login/reset");
+    expect(vi.mocked(ensureTenantForUser)).not.toHaveBeenCalled();
+  });
+
   it("convite válido: grava o vínculo e entra no app, sem tela intermediária", async () => {
     comSupabase({ verifyOtp: { data: { user: USUARIO }, error: null }, getUser: { data: { user: null } } });
     vi.mocked(decidirConviteDoSignup).mockReturnValue({

@@ -12,7 +12,8 @@ export function useAdminDashboardKPIs() {
     queryKey: ["admin", "dashboard", "kpis"],
     queryFn: () =>
       apiClient.get<KPIsResponse>("/api/v1/admin/dashboard/kpis").then((r) => r.data),
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    refetchIntervalInBackground: false,
   });
 }
