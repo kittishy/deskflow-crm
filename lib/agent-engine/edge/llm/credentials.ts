@@ -51,6 +51,12 @@ export interface LlmEdgeConfig {
    */
   openrouterApiKey?: string;
   /**
+   * Groq — provedor gratuito para verificações auxiliares do agente de
+   * mineração de leads. A chave é separada da de transcrição: esta vale para
+   * `/chat/completions`, aquela para `/audio/transcriptions`.
+   */
+  groqApiKey?: string;
+  /**
    * TTL do prefixo estável de cache (knob LLM_CACHE_TTL). Opcional para quem
    * monta a config na mão (testes) — o seam aplica a doutrina '1h' quando ausente.
    */
@@ -90,6 +96,7 @@ export function llmEdgeConfigFromEnv(env: {
   ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
+  GROQ_API_KEY?: string;
   LLM_CACHE_TTL?: string;
   AI_BUDGET_ENFORCEMENT?: string;
   DEEPSEEK_THINKING?: string;
@@ -106,6 +113,7 @@ export function llmEdgeConfigFromEnv(env: {
     ...(env.ANTHROPIC_API_KEY ? { anthropicApiKey: env.ANTHROPIC_API_KEY } : {}),
     ...(env.OPENAI_API_KEY ? { openaiApiKey: env.OPENAI_API_KEY } : {}),
     ...(env.OPENROUTER_API_KEY ? { openrouterApiKey: env.OPENROUTER_API_KEY } : {}),
+    ...(env.GROQ_API_KEY ? { groqApiKey: env.GROQ_API_KEY } : {}),
     cacheTtl: ttl,
     deepseekThinking: raciocinio,
     // Sem `if` de valor vazio, ao contrário das chaves acima: aqui o ausente
@@ -384,6 +392,9 @@ export async function resolveOrgLlmConfig(
     origemDaChave = 'chave_da_instalacao';
   } else if (provider === 'openrouter' && cfg.openrouterApiKey) {
     apiKey = cfg.openrouterApiKey;
+    origemDaChave = 'chave_da_instalacao';
+  } else if (provider === 'groq' && cfg.groqApiKey) {
+    apiKey = cfg.groqApiKey;
     origemDaChave = 'chave_da_instalacao';
   } else {
     throw new LlmNotConfiguredError();

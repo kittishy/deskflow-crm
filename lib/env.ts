@@ -254,6 +254,11 @@ const schema = z.object({
   // da OpenAI da organização — assim como `TRANSCRIPTION_MODEL`. Leitura
   // tolerante em `idiomasDaTranscricao` (grafia errada não derruba o worker).
   TRANSCRIPTION_LANGUAGES: z.string().optional().default(""),
+  // Groq — provedor de chat gratuito para verificações auxiliares do agente de
+  // mineração de leads. A chave é separada da de transcrição: esta vale para
+  // `/chat/completions`, aquela para `/audio/transcriptions`. Vazio = ausente.
+  GROQ_API_KEY: z.string().optional().default(""),
+  GROQ_BASE_URL: z.string().optional().default("https://api.groq.com/openai/v1"),
   // Endereço da API do Jev (TypeSafe AI). Vazio é ausente: vale
   // https://api.typesafe.ai. Existe para o dublê do e2e — a CHAVE nunca vem
   // daqui, é por organização (BYOK). Quem lê é `baseDaApiDoJev()`, em

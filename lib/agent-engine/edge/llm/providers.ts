@@ -63,6 +63,14 @@ export const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com';
 export const REQUESTY_ENDPOINT = 'https://router.requesty.ai/v1';
 
 /**
+ * Groq é OpenAI-compatível: mesma fábrica, mesmo formato de payload, sem SDK
+ * novo. Usado para verificações auxiliares do agente de mineração de leads —
+ * a chave é gratuita e a latência é baixa, o que a torna ideal para checagens
+ * rápidas que não precisam do modelo principal.
+ */
+export const GROQ_ENDPOINT = process.env.GROQ_BASE_URL?.trim() || 'https://api.groq.com/openai/v1';
+
+/**
  * Cabeçalhos OPCIONAIS de atribuição da OpenRouter.
  *
  * A doc deles chama `HTTP-Referer` e `X-Title` de "optional headers to identify
@@ -302,6 +310,16 @@ export function createDefaultRegistry(opts?: {
      */
     requesty: (apiKey, modelId, baseUrl) => {
       const endpoint = baseUrl ?? REQUESTY_ENDPOINT;
+      return createOpenAI({ apiKey, baseURL: endpoint, fetch: contain(endpoint) }).chat(modelId);
+    },
+    /**
+     * Groq: OpenAI-compatível, com `base_url` próprio pela mesma razão da
+     * OpenRouter. `.chat()` pelo mesmo motivo: Chat Completions é o formato
+     * que o provedor serve. Usado para verificações auxiliares do agente de
+     * mineração de leads.
+     */
+    groq: (apiKey, modelId, baseUrl) => {
+      const endpoint = baseUrl ?? GROQ_ENDPOINT;
       return createOpenAI({ apiKey, baseURL: endpoint, fetch: contain(endpoint) }).chat(modelId);
     },
     /**
