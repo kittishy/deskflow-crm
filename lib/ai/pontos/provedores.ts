@@ -107,6 +107,16 @@ export const PROVEDORES = [
     prefixoDaChave: "rqsty-…",
   },
   {
+    id: "groq",
+    rotulo: "Groq",
+    quandoUsar:
+      "Inferência gratuita e muito rápida, ideal para verificações auxiliares e checagens que não precisam do modelo principal. A chave é gratuita no painel deles.",
+    aceitaEndpointProprio: true,
+    catalogoSincronizavel: false,
+    ondePegarAChave: "https://console.groq.com/keys",
+    prefixoDaChave: "gsk_…",
+  },
+  {
     id: "custom",
     rotulo: "Provedor personalizado (compatível com OpenAI)",
     quandoUsar:

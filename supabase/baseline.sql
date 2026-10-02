@@ -45202,6 +45202,36 @@ on conflict (provider, model_id) do update set
   supports_tools = excluded.supports_tools,
   supports_vision = excluded.supports_vision;
 
+-- ---- Catálogo da Groq (migration 0504) ----
+--
+-- OpenAI-compatível, como DeepSeek e Requesty: ids e preços verificados em
+-- `https://console.groq.com/docs/models` e na página do modelo, convertidos
+-- para CENTAVOS por milhão. Não insere em `ai_pricing`; o backfill 0113 acima
+-- cria a linha por `model_id` na próxima reaplicação. Racional inteiro na
+-- migration 0504.
+insert into public.ai_models
+  (provider, model_id, display_name, description, context_window,
+   input_price_per_million_cents, output_price_per_million_cents,
+   supports_tools, supports_vision)
+values
+  ('groq', 'qwen/qwen3.8-27b', 'Qwen 3.8 27B (Groq)',
+   'Raciocínio e tool calling de fronteira num modelo denso, com latência muito baixa. Enxerga imagem (até 3 por chamada).',
+   131072, 80, 400, true, true),
+  ('groq', 'openai/gpt-oss-120b', 'GPT-OSS 120B (Groq)',
+   'Modelo aberto de 120B, barato e rápido para atendimento de volume.',
+   131072, 15, 60, true, false),
+  ('groq', 'openai/gpt-oss-20b', 'GPT-OSS 20B (Groq)',
+   'O menor e mais barato do catálogo, para classificações e checagens.',
+   131072, 8, 30, true, false)
+on conflict (provider, model_id) do update set
+  display_name = excluded.display_name,
+  description = excluded.description,
+  context_window = excluded.context_window,
+  input_price_per_million_cents = excluded.input_price_per_million_cents,
+  output_price_per_million_cents = excluded.output_price_per_million_cents,
+  supports_tools = excluded.supports_tools,
+  supports_vision = excluded.supports_vision;
+
 -- ---- menu lateral por EMPRESA (migration 0367, issue #1341) ----
 --
 -- `organizations.interface_settings` é a escolha da EMPRESA: o universo de portas

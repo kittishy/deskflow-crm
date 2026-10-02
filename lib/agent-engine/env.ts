@@ -55,6 +55,11 @@ const envSchema = z.object({
   // Consertar a irmã da OpenAI e deixar esta é o modo de falha desta família:
   // ao mexer aqui, confira as três de uma vez.
   OPENROUTER_API_KEY: z.string().min(1).optional(),
+  // A QUARTA irmã: Groq para verificações auxiliares do agente de mineração de
+  // leads. Mesmo padrão das três acima — sem esta linha a chave some no boot do
+  // worker (Zod remove o que o schema não declara) e o degrau de fallback nunca
+  // a alcança. O caminho preferencial continua sendo BYOK por organização.
+  GROQ_API_KEY: z.string().min(1).optional(),
   // Modelo default do agente quando a org não define o dela (knob, nunca constante).
   AGENT_DEFAULT_MODEL: z.string().min(1).default('claude-sonnet-4-5'),
   // Teto de conexões por pool do pg. Sem valor = pg decide (default 10).

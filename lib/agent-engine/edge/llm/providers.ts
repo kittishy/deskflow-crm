@@ -66,9 +66,11 @@ export const REQUESTY_ENDPOINT = 'https://router.requesty.ai/v1';
  * Groq é OpenAI-compatível: mesma fábrica, mesmo formato de payload, sem SDK
  * novo. Usado para verificações auxiliares do agente de mineração de leads —
  * a chave é gratuita e a latência é baixa, o que a torna ideal para checagens
- * rápidas que não precisam do modelo principal.
+ * rápidas que não precisam do modelo principal. Endpoint canônico fixo como
+ * os demais: base customizada viaja no argumento `baseUrl`, nunca em env lido
+ * aqui (o schema do worker remove o que não declara).
  */
-export const GROQ_ENDPOINT = process.env.GROQ_BASE_URL?.trim() || 'https://api.groq.com/openai/v1';
+export const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1';
 
 /**
  * Cabeçalhos OPCIONAIS de atribuição da OpenRouter.
