@@ -26,11 +26,13 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 
+import { openRouterFetch } from "./openrouter-reasoning";
 import { DEEPSEEK_ENDPOINT, REQUESTY_ENDPOINT } from "@/lib/agent-engine/edge/llm/providers";
 import { fetchParaDestinoDaOrganizacao } from "@/lib/automation/destinos-internos-autorizados";
 import { decryptKey, byteaToBuffer } from "@/lib/crypto/aes_gcm";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { AiFreeOnlyError, assertFreeModel, freeOnlyForOrganization } from "./free-only";
 
 import { escolherModeloNoCatalogo } from "./agents/escolher-modelo";
 import { OPENROUTER_BASE_URL, resolveLanguageModel, type ModelId } from "./gateway";
@@ -80,6 +82,19 @@ export async function resolverModeloDoPonto(
 ): Promise<ModeloResolvido | null> {
   const binding = await lerBinding(purpose, organizationId);
 
+  if (freeOnlyForOrganization(organizationId)) {
+    if (binding === null) {
+      const providerDaOrg = await providerDaOrganizacao(organizationId);
+      if (providerDaOrg !== "openrouter") throw new AiFreeOnlyError();
+      const credencialDaOrg = await credencialDaOrganizacao(organizationId);
+      const padraoDaOrg = await padraoDaOrganizacao(organizationId, credencialDaOrg);
+      if (padraoDaOrg === null) throw new AiFreeOnlyError();
+      assertFreeModel(organizationId, 'openrouter', padraoDaOrg.modelId);
+      return padraoDaOrg;
+    }
+    assertFreeModel(organizationId, binding.provider, binding.model_id, binding.base_url);
+  }
+
   if (binding === null) {
     // Antes da chave da instalação vem a credencial da PRÓPRIA organização —
     // o degrau do meio de `resolveOrgLlmConfig`, que esta pilha pulava.
@@ -110,6 +125,7 @@ export async function resolverModeloDoPonto(
 
   const apiKey = await decifrarChave(binding.credential_id, organizationId);
   if (apiKey === null) {
+    if (freeOnlyForOrganization(organizationId)) return null;
     // Binding configurado mas sem chave utilizável: cai no padrão em vez de
     // deixar o ponto morto. O aviso é o que impede isso de virar mais uma
     // falha muda — foi justamente o que esta frente veio acabar.
@@ -549,7 +565,7 @@ function instanciar(
     case "google":
       return createGoogleGenerativeAI({ apiKey })(modelId);
     case "openrouter":
-      return createOpenAI({ apiKey, baseURL: baseUrl ?? OPENROUTER_BASE_URL }).chat(modelId); // ver providers.ts
+      return createOpenAI({ apiKey, baseURL: baseUrl ?? OPENROUTER_BASE_URL, fetch: openRouterFetch(fetch, baseUrl ?? OPENROUTER_BASE_URL) }).chat(modelId); // ver providers.ts
     // A DeepSeek fala a API da OpenAI. Sem este caso, uma organização em
     // DeepSeek cairia no `default` (null) e a pilha antiga seguiria para o
     // padrão com aviso — a tela ofereceria um provedor que estes workers ignoram.

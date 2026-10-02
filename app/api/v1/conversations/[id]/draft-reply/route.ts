@@ -12,6 +12,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { traduzir } from "@/lib/i18n/dicionario";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 type Ctx = { params: Promise<{ id: string }> };
 async function context(ctx: Ctx, requestId: string) {
   const auth = await requireRole("agent", { requestId, resource: "conversations" });

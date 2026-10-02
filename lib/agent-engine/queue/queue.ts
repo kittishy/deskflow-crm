@@ -121,6 +121,12 @@ export interface ClaimOptions {
   maxConcurrency: number;
   /** Máximo de jobs por rodada de claim (default: o próprio maxConcurrency). */
   batchSize?: number;
+  /** Escopo opcional usado por consumidores assistidos em uma org. */
+  organizationId?: string;
+  createdAfter?: Date;
+  kinds?: readonly JobKind[];
+  /** Restrict inbound jobs to explicitly enabled channel sessions. */
+  channelSessionIds?: readonly string[];
 }
 
 const CLAIM_SQL = `
@@ -129,6 +135,10 @@ const CLAIM_SQL = `
     select distinct on (coalesce(j.contact_id, j.id)) j.id
     from job_queue j
     where j.status = 'pending' and j.run_after <= now()
+      and ($3::uuid is null or j.organization_id = $3)
+      and ($4::timestamptz is null or j.created_at >= $4)
+      and ($5::text[] is null or j.kind = any($5::text[]))
+      and (j.kind <> 'inbound_turn' or $6::text[] is null or j.payload->>'channel_session_id' = any($6::text[]))
       and (j.contact_id is null
            or not exists (select 1 from job_queue r
                           where r.contact_id = j.contact_id and r.status = 'running'))
@@ -139,6 +149,10 @@ const CLAIM_SQL = `
     select j.id from job_queue j
     join dedup d on d.id = j.id
     where j.status = 'pending'
+      and ($3::uuid is null or j.organization_id = $3)
+      and ($4::timestamptz is null or j.created_at >= $4)
+      and ($5::text[] is null or j.kind = any($5::text[]))
+      and (j.kind <> 'inbound_turn' or $6::text[] is null or j.payload->>'channel_session_id' = any($6::text[]))
     order by j.priority, j.run_after
     limit $1
     for update of j skip locked
@@ -219,7 +233,10 @@ export async function claimJobs(pool: Pool, opts: ClaimOptions): Promise<JobRow[
     await client.query('begin');
     await client.query('select pg_advisory_xact_lock($1)', [CLAIM_LOCK_KEY]);
     const running = await client.query<{ n: number }>(
-      `select count(*)::int as n from job_queue where status = 'running'`,
+      opts.organizationId
+        ? `select count(*)::int as n from job_queue where status = 'running' and organization_id = $1 and ($2::timestamptz is null or created_at >= $2)`
+        : `select count(*)::int as n from job_queue where status = 'running'`,
+      opts.organizationId ? [opts.organizationId, opts.createdAfter ?? null] : undefined,
     );
     const free = Math.min(
       opts.batchSize ?? opts.maxConcurrency,
@@ -229,7 +246,14 @@ export async function claimJobs(pool: Pool, opts: ClaimOptions): Promise<JobRow[
       await client.query('rollback');
       return [];
     }
-    const { rows } = await client.query<JobRow>(CLAIM_SQL, [free, opts.workerId]);
+    const { rows } = await client.query<JobRow>(CLAIM_SQL, [
+      free,
+      opts.workerId,
+      opts.organizationId ?? null,
+      opts.createdAfter ?? null,
+      opts.kinds === undefined ? null : [...opts.kinds],
+      opts.channelSessionIds === undefined ? null : [...opts.channelSessionIds],
+    ]);
     await client.query('commit');
     return rows;
   } catch (err) {
@@ -390,7 +414,7 @@ export async function rescheduleJob(
  */
 export async function reapExpiredJobs(
   db: Queryable,
-  opts: { visibilityTimeoutMs: number },
+  opts: { visibilityTimeoutMs: number; organizationId?: string; createdAfter?: Date },
 ): Promise<{ revived: number; dead: number }> {
   const { rows } = await db.query<{ id: string; status: JobStatus }>(
     `with expired as (
@@ -406,6 +430,8 @@ export async function reapExpiredJobs(
            locked_by = null, locked_at = null,
            last_error = coalesce(last_error, 'visibility timeout excedido (worker morto?)')
        where status = 'running' and locked_at < now() - ($1 * interval '1 millisecond')
+         and ($2::uuid is null or organization_id = $2)
+         and ($3::timestamptz is null or created_at >= $3)
        -- last_error PRECISA sair no returning: a CTE do alerta abaixo só
        -- enxerga as colunas devolvidas aqui, não as da tabela. Faltando ela, a
        -- query inteira morre com "column last_error does not exist" — e como
@@ -428,7 +454,7 @@ export async function reapExpiredJobs(
        where status = 'dead'
      )
      select id, status from expired`,
-    [opts.visibilityTimeoutMs],
+    [opts.visibilityTimeoutMs, opts.organizationId ?? null, opts.createdAfter ?? null],
   );
   return {
     revived: rows.filter((r) => r.status === 'pending').length,

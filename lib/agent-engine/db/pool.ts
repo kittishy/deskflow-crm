@@ -19,18 +19,38 @@ import pg from 'pg';
 
 import { createLogger } from '../obs/logger';
 
+export function poolOptions(databaseUrl: string): pg.PoolConfig {
+  const raw = process.env.DB_POOL_MAX;
+  const parsed = raw === undefined ? Number.NaN : Number.parseInt(raw, 10);
+  const max = Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+  const ca = process.env.SUPABASE_DB_SSL_CA;
+  const role = process.env.SUPABASE_DB_ROLE;
+  if (role && role !== 'service_role') {
+    throw new Error('SUPABASE_DB_ROLE aceita somente service_role');
+  }
+  return {
+    connectionString: databaseUrl,
+    ...(max !== undefined ? { max } : {}),
+    ...(ca ? { ssl: { ca, rejectUnauthorized: true } } : {}),
+    ...(role === 'service_role'
+      ? {
+          verify: (client: pg.PoolClient, done: (err?: Error) => void) => {
+            client.query('SET ROLE service_role')
+              .then(() => done())
+              .catch((err: unknown) => done(err instanceof Error ? err : new Error(String(err))));
+          },
+        }
+      : {}),
+  };
+}
+
 export function createPool(
   databaseUrl: string,
   onError?: (err: Error) => void,
 ): pg.Pool {
-  // Knob opcional DB_POOL_MAX (env.ts Zod): teto de conexões por pool. Sem ele, o
-  // pg decide (default 10) — o caso de produção. Os testes rodam em paralelo (N
-  // pools × maxForks), então setam um teto baixo para não estourar max_connections
-  // do servidor (invariante do vitest.config.ts). PII fora daqui: só o número.
-  const raw = process.env.DB_POOL_MAX;
-  const parsed = raw === undefined ? Number.NaN : Number.parseInt(raw, 10);
-  const max = Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
-  const pool = new pg.Pool({ connectionString: databaseUrl, max });
+  // DB_POOL_MAX permite limitar conexões por instância serverless. Sem knob,
+  // preservamos o default 10 do pg para compatibilidade com self-host.
+  const pool = new pg.Pool(poolOptions(databaseUrl));
   const handler =
     onError ??
     ((err: Error): void => {

@@ -89,6 +89,7 @@
  */
 import { byteaToBuffer, decryptKey } from "@/lib/crypto/aes_gcm";
 import { OPENROUTER_BASE_URL } from "@/lib/ai/gateway";
+import { freeOnlyForOrganization } from "@/lib/ai/free-only";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -219,6 +220,9 @@ export async function resolverChaveDeEmbedding(
   ponto: PontoDeEmbedding = "embedding_indexar",
   opcoes: { familia?: ProvedorDaBase | null } = {},
 ): Promise<ChaveDeEmbedding | null> {
+  // Embeddings disponíveis neste produto são pagos; organizações free-only
+  // usam busca textual no runtime e não iniciam indexação/cobrança de vetor.
+  if (freeOnlyForOrganization(organizationId)) return null;
   const avisos: string[] = [];
   const familia =
     opcoes.familia !== undefined

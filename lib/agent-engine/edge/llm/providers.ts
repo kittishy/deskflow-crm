@@ -10,6 +10,7 @@ import type { LanguageModel } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 
 import { fetchParaDestinoDaOrganizacao } from '@/lib/automation/destinos-internos-autorizados';
+import { openRouterFetch } from '@/lib/ai/openrouter-reasoning';
 
 import { allowlistedFetch, buildAllowlist } from '../egress';
 
@@ -268,7 +269,7 @@ export function createDefaultRegistry(opts?: {
         apiKey,
         baseURL: endpoint,
         headers: cabecalhosDeAtribuicaoOpenRouter(),
-        fetch: contain(endpoint),
+        fetch: openRouterFetch(contain(endpoint), endpoint),
       });
       // Chat Completions, NÃO Responses: a OpenRouter fala a API da OpenAI
       // (chat/completions). O `createOpenAI()(modelId)` desta versão do SDK usa

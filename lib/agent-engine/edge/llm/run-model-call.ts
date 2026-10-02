@@ -21,6 +21,7 @@ import type pg from 'pg';
 import { z } from 'zod';
 
 import { PONTO_POR_ID } from '@/lib/ai/pontos/registro';
+import { assertFreeModel } from '@/lib/ai/free-only';
 import { scrubMessage } from '@/lib/sentry/scrub';
 
 import type { Logger } from '../../obs/logger';
@@ -535,6 +536,10 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
           },
     padraoDaOrganizacao: { provider: padrao.provider, defaultModel: padrao.defaultModel },
   }, deps.log ? { log: deps.log } : {});
+
+  // Política por organização aplicada no seam comum antes de provider, budget
+  // ou chamada externa: não existe fallback pago para tenants free-only.
+  assertFreeModel(input.tenantId, decisao.provider, decisao.modelId ?? '', decisao.baseUrl);
 
   // Só re-resolve a credencial quando a decisão aponta para OUTRA que não a já
   // carregada — decifrar duas vezes a mesma chave é custo puro no caminho

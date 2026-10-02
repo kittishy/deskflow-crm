@@ -60,6 +60,11 @@ export interface DrainKnobs {
    * testes que não exercitam o gate — o default de 21 dias em ms é aplicado.
    */
   allowlistTtlMs?: number;
+  /** Scope restrito por um cron assistido opt-in. Ausente no daemon padrão. */
+  organizationId?: string;
+  createdAfter?: Date;
+  /** Allowlist required by the one-shot assisted consumer; absent for normal workers. */
+  channelSessionIds?: readonly string[];
 }
 
 /** Default de `allowlistTtlMs` (21 dias) para testes que omitem o knob. */
@@ -73,8 +78,11 @@ export async function drainTick(pool: pg.Pool, knobs: DrainKnobs, log: Logger): 
      where event_type = 'ai_agent.dispatch_requested'
        and status = 'processing'
        and $1 = any(consumed_by)
+       and ($3::uuid is null or organization_id = $3)
+       and ($4::timestamptz is null or created_at >= $4)
+       and ($5::text[] is null or payload->>'channel_session_id' = any($5::text[]))
        and updated_at < now() - make_interval(secs => $2 / 1000.0)`,
-    [DRAIN_CONSUMER, knobs.reapTimeoutMs],
+    [DRAIN_CONSUMER, knobs.reapTimeoutMs, knobs.organizationId ?? null, knobs.createdAfter ?? null, knobs.channelSessionIds ? [...knobs.channelSessionIds] : null],
   );
 
   const { rows: events } = await pool.query<EventRow>(
@@ -87,12 +95,15 @@ export async function drainTick(pool: pg.Pool, knobs: DrainKnobs, log: Logger): 
        where event_type = 'ai_agent.dispatch_requested'
          and status = 'pending'
          and (next_attempt_at is null or next_attempt_at <= now())
+         and ($3::uuid is null or organization_id = $3)
+         and ($4::timestamptz is null or created_at >= $4)
+         and ($5::text[] is null or payload->>'channel_session_id' = any($5::text[]))
        order by created_at
        limit $1
        for update skip locked
      )
      returning e.id, e.organization_id, e.payload, e.attempts, e.created_at`,
-    [knobs.batchSize, DRAIN_CONSUMER],
+    [knobs.batchSize, DRAIN_CONSUMER, knobs.organizationId ?? null, knobs.createdAfter ?? null, knobs.channelSessionIds ? [...knobs.channelSessionIds] : null],
   );
 
   for (const event of events) {

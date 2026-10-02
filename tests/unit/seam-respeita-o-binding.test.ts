@@ -258,3 +258,17 @@ describe("o custo é atribuído ao ponto certo", () => {
     expect(params).toContain("gpt-5-mini");
   });
 });
+
+describe('politica free-only no seam real', () => {
+  it('recusa modelo pago antes de instanciar o provider', async () => {
+    vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', ORG);
+    try {
+      const { pool } = poolFalso({});
+      const { registry, chamadas } = registrySpiao();
+      await expect(runModelCall(pool, cfg, {
+        tenantId: ORG, purpose: 'compaction', messages: [{ role: 'user', content: 'ficticio' }],
+      }, { registry })).rejects.toThrow('ai_free_only');
+      expect(chamadas).toHaveLength(0);
+    } finally { vi.unstubAllEnvs(); }
+  });
+});

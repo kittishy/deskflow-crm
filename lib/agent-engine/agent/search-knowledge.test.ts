@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type pg from 'pg';
 
 // search-knowledge importa lib/ai/embed → lib/env, que valida env no import.
@@ -14,6 +14,25 @@ const hit = {
 };
 
 describe('searchKnowledge', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('free-only busca por texto com tenant e fonte/versão, sem chamar embeddings', async () => {
+    vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', 'org1');
+    const query = vi.fn().mockResolvedValue({ rows: [hit] });
+    const embed = vi.fn();
+    const out = await searchKnowledge(
+      { query } as unknown as pg.Pool,
+      { organizationId: 'org1', knowledgeSourceIds: ['s1'], kbVersionId: 'kb1', query: 'frete', topK: 4, threshold: 0.72 },
+      { embed },
+    );
+    expect(out).toEqual({ ok: true, results: [hit] });
+    expect(embed).not.toHaveBeenCalled();
+    expect(query.mock.calls[0]?.[0]).toContain('c.organization_id = $1');
+    expect(query.mock.calls[0]?.[0]).toContain('c.knowledge_source_id = any($3::uuid[])');
+    expect(query.mock.calls[0]?.[0]).toContain('c.kb_version_id = $4::uuid');
+    expect(query.mock.calls[0]?.[1]).toEqual(['org1', 'frete', ['s1'], 'kb1', 4]);
+  });
+
   it('embeda a query e devolve os hits da RPC', async () => {
     const query = vi.fn().mockResolvedValue({ rows: [hit] });
     const embed = vi.fn().mockResolvedValue({ embedding: [0.1, 0.2], promptTokens: 3, model: 'm' });

@@ -16,11 +16,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const bindings = vi.hoisted(() => ({ linha: null as Record<string, unknown> | null }));
 const credenciais = vi.hoisted(() => ({ linha: null as Record<string, unknown> | null }));
+const orgSettings = vi.hoisted(() => ({ linha: null as Record<string, unknown> | null }));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (tabela: string) => {
-      const alvo = tabela === "ai_purpose_bindings" ? bindings : credenciais;
+      const alvo = tabela === "ai_purpose_bindings" ? bindings : tabela === "organizations" ? orgSettings : credenciais;
       const chain = {
         select: () => chain,
         eq: () => chain,
@@ -54,6 +55,7 @@ const ORG = "33333333-3333-4333-8333-333333333333";
 beforeEach(() => {
   bindings.linha = null;
   credenciais.linha = null;
+  orgSettings.linha = null;
 });
 
 describe("sem binding e sem credencial da organização, vale a chave da instalação", () => {
@@ -552,5 +554,45 @@ describe("o padrão da organização com o par (provedor, modelo) incoerente", (
   it("catálogo ilegível mantém o de antes, sem lançar", async () => {
     const r = await resolver({ provider: "openai", default_model: "claude-sonnet-5" }, "falha");
     expect(r?.modelId).toBe("openai/claude-sonnet-5");
+  });
+});
+
+describe('politica free-only no gateway real', () => {
+  it('nao cai no padrao pago quando binding falta', async () => {
+    vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', ORG);
+    try {
+      await expect(resolverModeloDoPonto('sentiment_classify', ORG, 'anthropic/claude-haiku-4-5')).rejects.toThrow('ai_free_only');
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it('usa o modelo gratuito escolhido como padrão da organização sem binding', async () => {
+    vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', ORG);
+    orgSettings.linha = { settings: { llm: { provider: 'openrouter', default_model: 'qwen/model:free' } } };
+    try {
+      const r = await resolverModeloDoPonto('sentiment_classify', ORG, 'anthropic/claude-haiku-4-5');
+      expect(r?.modelId).toBe('qwen/model:free');
+      expect(r?.origem).toBe('padrao');
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it('nega modelo com sufixo free quando o provider padrão da organização é custom', async () => {
+    vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', ORG);
+    orgSettings.linha = { settings: { llm: { provider: 'custom', default_model: 'vendor/model:free' } } };
+    try {
+      await expect(resolverModeloDoPonto('sentiment_classify', ORG, 'anthropic/claude-haiku-4-5')).rejects.toThrow('ai_free_only');
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it('permite binding gratuito com chave propria', async () => {
+    vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', ORG);
+    bindings.linha = { provider: 'openrouter', credential_id: 'cred-1', model_id: 'qwen/model:free', base_url: null };
+    credenciais.linha = { api_key_encrypted: 'x', api_key_iv: 'y', api_key_tag: 'z' };
+    try {
+      expect((await resolverModeloDoPonto('sentiment_classify', ORG, 'anthropic/claude-haiku-4-5'))?.modelId).toBe('qwen/model:free');
+    } finally { vi.unstubAllEnvs(); }
+  });
+  it('binding gratuito sem chave nao cai em pago', async () => {
+    vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', ORG);
+    bindings.linha = { provider: 'openrouter', credential_id: 'missing', model_id: 'qwen/model:free', base_url: null };
+    try {
+      expect(await resolverModeloDoPonto('sentiment_classify', ORG, 'anthropic/claude-haiku-4-5')).toBeNull();
+    } finally { vi.unstubAllEnvs(); }
   });
 });

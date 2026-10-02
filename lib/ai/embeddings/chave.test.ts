@@ -429,3 +429,11 @@ describe("a família da base não muda porque uma credencial apareceu ou sumiu",
     expect(await temChaveDeEmbedding("org-1")).toBe(true);
   });
 });
+
+it('politica gratuita bloqueia embedding mesmo com chave valida', async () => {
+  vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', 'org-1');
+  state.credentials = [credential({})];
+  try {
+    expect(await resolverChaveDeEmbedding('org-1')).toBeNull();
+  } finally { vi.unstubAllEnvs(); }
+});

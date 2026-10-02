@@ -18,6 +18,7 @@
 import type pg from 'pg';
 
 import { embedText } from '@/lib/ai/embed';
+import { freeOnlyForOrganization } from '@/lib/ai/free-only';
 import { MODELO_DE_EMBEDDING_DO_GOOGLE } from '@/lib/ai/embeddings/chave';
 import type { Citation } from '@/lib/ai/citations/types';
 import type { Logger } from '../obs/logger';
@@ -70,6 +71,51 @@ export async function searchKnowledge(
           'este agente não tem material de consulta habilitado — responda com o que você já sabe e não invente fatos.',
       },
     };
+  }
+
+  // Busca textual tenant scoped permite consultar material já indexado sem
+  // criar vetores pagos para organizações optadas em free-only.
+  if (freeOnlyForOrganization(args.organizationId)) {
+    try {
+      const { rows } = await pool.query<KnowledgeHit>(
+        `with query_terms as (
+           select to_tsquery(
+             'portuguese',
+             coalesce(
+               (select string_agg(quote_literal(lexeme), ' | ')
+                  from unnest(tsvector_to_array(to_tsvector('portuguese', $2))) as lexeme),
+               quote_literal('__empty_query__')
+             )
+           ) as terms
+         )
+         select c.id as chunk_id, c.knowledge_source_id, s.name as source_name,
+                c.content,
+                ts_rank_cd(to_tsvector('portuguese', c.content), query_terms.terms)::real as similarity,
+                c.metadata
+           from ai_chunks c
+           left join ai_knowledge_sources s
+             on s.id = c.knowledge_source_id and s.organization_id = c.organization_id
+           cross join query_terms
+          where c.organization_id = $1
+            and to_tsvector('portuguese', c.content) @@ query_terms.terms
+            and (($3::uuid[] <> '{}'::uuid[] and c.knowledge_source_id = any($3::uuid[])
+                  and s.is_active and s.status = 'ready'
+                  and c.kb_version_id = s.active_kb_version_id)
+              or ($3::uuid[] = '{}'::uuid[] and c.kb_version_id = $4::uuid))
+          order by similarity desc
+          limit $5`,
+        [args.organizationId, args.query, fontes, args.kbVersionId ?? null, args.topK],
+      );
+      return { ok: true, results: rows };
+    } catch {
+      return {
+        ok: false,
+        error: {
+          code: 'knowledge_unavailable',
+          message: 'a base de conhecimento está indisponível agora — responda com o que você já sabe e não invente fatos.',
+        },
+      };
+    }
   }
 
   try {

@@ -7,6 +7,27 @@ import { drainTick } from './drain';
 
 const knobs = { batchSize: 10, intervalMs: 0, idleIntervalMs: 0, debounceMs: 0, reapTimeoutMs: 60000 };
 const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as never;
+it('scopes atomic event claim and reaper to the opted organization, cutoff and channels', async () => {
+  const calls: Array<{ sql: string; params: unknown[] }> = [];
+  const query = vi.fn(async (sql: string, params: unknown[] = []) => {
+    calls.push({ sql, params });
+    return { rows: [] };
+  });
+  const cutoff = new Date('2026-10-01T00:00:00.000Z');
+  await drainTick(
+    { query } as unknown as pg.Pool,
+    { ...knobs, organizationId: 'org-1', createdAfter: cutoff, channelSessionIds: ['44444444-4444-4444-8444-444444444444'] },
+    log,
+  );
+  expect(calls[0]!.sql).toContain('organization_id = $3');
+  expect(calls[0]!.sql).toContain('created_at >= $4');
+  expect(calls[0]!.sql).toContain("payload->>'channel_session_id' = any($5::text[])");
+  expect(calls[0]!.params).toEqual(['agent-engine', knobs.reapTimeoutMs, 'org-1', cutoff, ['44444444-4444-4444-8444-444444444444']]);
+  expect(calls[1]!.sql).toContain('organization_id = $3');
+  expect(calls[1]!.sql).toContain('created_at >= $4');
+  expect(calls[1]!.sql).toContain("payload->>'channel_session_id' = any($5::text[])");
+  expect(calls[1]!.params).toEqual([knobs.batchSize, 'agent-engine', 'org-1', cutoff, ['44444444-4444-4444-8444-444444444444']]);
+});
 const event = {
   id: 'e1', organization_id: 'org1', attempts: 1,
   payload: {
