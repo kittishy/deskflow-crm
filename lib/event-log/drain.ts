@@ -137,7 +137,14 @@ export async function avisarEventoMorto(
 
 export async function drainEventLog(
   admin: SupabaseClient,
-  opts: { limit?: number } = {},
+  opts: {
+    limit?: number;
+    organizationId?: string;
+    createdAfter?: Date;
+    eventTypes?: readonly string[];
+    handlerKeys?: readonly string[];
+    beforeClaim?: (row: EventRow, admin: SupabaseClient) => Promise<boolean>;
+  } = {},
 ): Promise<DrainSummary> {
   const limit = opts.limit ?? 50;
   const summary: DrainSummary = {
@@ -149,7 +156,11 @@ export async function drainEventLog(
     pulados: [],
   };
 
-  const handledTypes = [...new Set(getRegisteredHandlers().flatMap((h) => h.events))];
+  const allowedKeys = opts.handlerKeys ? new Set(opts.handlerKeys) : null;
+  const handledTypes = [...new Set(getRegisteredHandlers()
+    .filter((h) => !allowedKeys || allowedKeys.has(h.key))
+    .flatMap((h) => h.events)
+    .filter((eventType) => !opts.eventTypes || opts.eventTypes.includes(eventType)))];
   if (!handledTypes.length) return summary;
 
   const nowIso = new Date().toISOString();
@@ -176,11 +187,15 @@ export async function drainEventLog(
   // `trg_event_log_touch` (BEFORE UPDATE) o reescreve em toda atualização, então
   // a linha carrega o instante do CLAIM enquanto o handler não volta.
   const limiteDePresos = new Date(Date.now() - PROCESSING_STALE_MS).toISOString();
-  const { data: presos } = await admin
+  let reaperQuery = admin
     .from("event_log")
-    .select("id, organization_id, event_type, attempts")
+    .select("id, organization_id, event_type, entity_kind, entity_id, payload, metadata, consumed_by, attempts, created_at")
     .eq("status", "processing")
     .lt("updated_at", limiteDePresos);
+  if (opts.organizationId) reaperQuery = reaperQuery.eq("organization_id", opts.organizationId);
+  if (opts.createdAfter) reaperQuery = reaperQuery.gte("created_at", opts.createdAfter.toISOString());
+  if (handledTypes.length) reaperQuery = reaperQuery.in("event_type", handledTypes);
+  const { data: presos } = handledTypes.length ? await reaperQuery : { data: [] };
 
   // ─── E A VOLTA CONTA COMO TENTATIVA ────────────────────────────────────────
   //
@@ -217,13 +232,22 @@ export async function drainEventLog(
   // primeira a tocar incrementa — a segunda encontra `pending` e não faz nada.
   let reclamados = 0;
   for (const preso of presos ?? []) {
+    const presoRow = preso as unknown as EventRow;
+    if (opts.beforeClaim) {
+      try {
+        if (!(await opts.beforeClaim(presoRow, admin))) continue;
+      } catch {
+        logger.warn("[event-log.drain] reaper predicate failed closed");
+        continue;
+      }
+    }
     const attempts = preso.attempts + 1;
     const dead = attempts >= MAX_ATTEMPTS;
     // `preso.attempts === 0` é a PRIMEIRA volta deste evento — ninguém o
     // reclamou antes. Ele volta pronto para o mesmo tique (ver acima).
     const primeiraVolta = preso.attempts === 0;
     const motivo = `tentativa não voltou em ${PROCESSING_STALE_MS / 60_000} min (processo derrubado?)`;
-    const { data: tocado } = await admin
+    let reapUpdate = admin
       .from("event_log")
       .update({
         status: dead ? "dead" : "pending",
@@ -233,8 +257,11 @@ export async function drainEventLog(
         updated_at: nowIso,
       })
       .eq("id", preso.id)
-      .eq("status", "processing")
-      .select("id");
+      .eq("status", "processing");
+    if (opts.organizationId) reapUpdate = reapUpdate.eq("organization_id", opts.organizationId);
+    if (opts.createdAfter) reapUpdate = reapUpdate.gte("created_at", opts.createdAfter.toISOString());
+    reapUpdate = reapUpdate.in("event_type", handledTypes);
+    const { data: tocado } = await reapUpdate.select("id");
     if (!tocado?.length) continue;
     reclamados += 1;
     if (dead) {
@@ -248,7 +275,7 @@ export async function drainEventLog(
     });
   }
 
-  const { data: rows, error } = await admin
+  let pendingQuery = admin
     .from("event_log")
     // `created_at` viaja porque um consumidor não consegue distinguir "evento de
     // agora" de "evento de três dias parado em `pending`" sem ele — e o drain
@@ -262,6 +289,9 @@ export async function drainEventLog(
     .in("event_type", handledTypes)
     .order("created_at", { ascending: true })
     .limit(limit);
+  if (opts.organizationId) pendingQuery = pendingQuery.eq("organization_id", opts.organizationId);
+  if (opts.createdAfter) pendingQuery = pendingQuery.gte("created_at", opts.createdAfter.toISOString());
+  const { data: rows, error } = await pendingQuery;
 
   if (error) {
     logger.error("[event-log.drain] select failed", { error: error.message });
@@ -300,16 +330,31 @@ export async function drainEventLog(
     const row = raw as unknown as EventRow;
     summary.scanned += 1;
 
+    if (opts.beforeClaim) {
+      try {
+        if (!(await opts.beforeClaim(row, admin))) continue;
+      } catch {
+        logger.warn("[event-log.drain] claim predicate failed closed");
+        continue;
+      }
+    }
+
     // Claim otimista — outra instância pode ter pego a mesma linha.
-    const { data: claimed } = await admin
+    let claimQuery = admin
       .from("event_log")
       .update({ status: "processing", updated_at: new Date().toISOString() })
       .eq("id", row.id)
-      .eq("status", "pending")
-      .select("id");
+      .eq("status", "pending");
+    if (opts.organizationId) claimQuery = claimQuery.eq("organization_id", opts.organizationId);
+    if (opts.createdAfter) claimQuery = claimQuery.gte("created_at", opts.createdAfter.toISOString());
+    claimQuery = claimQuery.in("event_type", handledTypes);
+    const { data: claimed } = await claimQuery.select("id");
     if (!claimed?.length) continue;
 
-    const results = await dispatchEvent(row, { orgParada: parados.has(row.organization_id) });
+    const results = await dispatchEvent(row, {
+      orgParada: parados.has(row.organization_id),
+      handlerKeys: opts.handlerKeys,
+    });
 
     const okKeys = results
       .filter((r) => r.status === "ok" || r.status === "skipped")

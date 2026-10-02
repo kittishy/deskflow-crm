@@ -94,10 +94,14 @@ export function getRegisteredHandlers(): readonly EventHandler[] {
  */
 export async function dispatchEvent(
   row: EventRow,
-  opts: { orgParada: boolean },
+  opts: { orgParada: boolean; handlerKeys?: readonly string[] },
 ): Promise<HandlerResult[]> {
+  const allowedKeys = opts.handlerKeys ? new Set(opts.handlerKeys) : null;
   const matches = _handlers.filter(
-    (h) => h.events.includes(row.event_type) && !row.consumed_by.includes(h.key),
+    (h) =>
+      h.events.includes(row.event_type) &&
+      !row.consumed_by.includes(h.key) &&
+      (!allowedKeys || allowedKeys.has(h.key)),
   );
   if (!matches.length) return [];
 
