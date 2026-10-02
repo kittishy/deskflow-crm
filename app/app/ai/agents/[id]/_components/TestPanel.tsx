@@ -184,24 +184,26 @@ export function TestPanel({ agent, draft, published, readOnly }: Props) {
         // executado ainda" enquanto o servidor terminava e devolvia para
         // ninguém (issue #783).
         //
-        // 120s é o teto do orçamento de passos do agente, não um chute
-        // confortável: acima disso o problema é o agente, não a espera.
-        { timeoutMs: 120_000 },
+        // A rota pode executar por até 300s. Deixa uma margem para a resposta
+        // voltar antes de o cliente cancelar a requisição.
+        { timeoutMs: 270_000 },
       );
       setResult(res.data);
       qc.invalidateQueries({ queryKey: agentRunsKey(agent.id) });
       toast.success(t("Teste executado."));
     } catch (err) {
-      const readableError =
-        err instanceof ApiError
+      const timedOut =
+        typeof err === "object" && err !== null && "name" in err && err.name === "TimeoutError";
+      const readableError = timedOut
+        ? t(
+            "A resposta demorou mais que o limite da tela. O teste pode ter sido concluído no servidor; confira o histórico antes de executar novamente.",
+          )
+        : err instanceof ApiError
           ? t(err.message) || `${t("Erro")}: ${err.code}`
           : t("Erro inesperado.");
       setErrorMessage(readableError);
-      if (err instanceof ApiError) {
-        toast.error(readableError);
-      } else {
-        toast.error(readableError);
-      }
+      if (timedOut) qc.invalidateQueries({ queryKey: agentRunsKey(agent.id) });
+      toast.error(readableError);
     } finally {
       setPending(false);
     }
@@ -306,8 +308,8 @@ export function TestPanel({ agent, draft, published, readOnly }: Props) {
                 {typeof result.latency_ms === "number" ? `${result.latency_ms}ms` : "—"}
               </Cell>
               <Cell label={t("Tokens in/out")}>
-                {result.tokens_in?.toLocaleString()??"—"} /{" "}
-                {result.tokens_out?.toLocaleString()??"—"}
+                {result.tokens_in?.toLocaleString() ?? "—"} /{" "}
+                {result.tokens_out?.toLocaleString() ?? "—"}
               </Cell>
               <Cell label={t("Custo (cents)")}>{result.cost_cents ?? "—"}</Cell>
             </div>
