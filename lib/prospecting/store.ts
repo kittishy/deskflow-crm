@@ -17,6 +17,7 @@ import {
   type SearchInput,
   type Prospect,
 } from "./schema";
+import { buscarOsm } from "./fontes/osm";
 import {
   ProspectingError,
   providerRequest,
@@ -126,14 +127,24 @@ export async function createSearch(
       [org, requestId],
     );
     if (prior.rows[0]) return prior.rows[0];
-    const key = await credential(db, admin, org);
+    // A fonte gratuita não pede chave de ninguém; a paga exige a da organização.
+    const key = search.fonte === "apify" ? await credential(db, admin, org) : null;
     const { rows } = await db.query<Campaign>(
       "insert into prospecting_campaigns(organization_id,request_id,name,search) values($1,$2,$3,$4) returning *",
       [org, requestId, search.name, search],
     );
     const campaign = rows[0]!;
+    if (search.fonte === "osm") {
+      await buscarOsmAqui(db, org, campaign, search);
+      return (
+        await db.query<Campaign>(
+          "select * from prospecting_campaigns where organization_id=$1 and id=$2",
+          [org, campaign.id],
+        )
+      ).rows[0]!;
+    }
     try {
-      const run = await startSearch(key, search);
+      const run = await startSearch(key!, search);
       await db.query(
         "update prospecting_campaigns set run_id=$3,dataset_id=$4,search_status='running',updated_at=now() where organization_id=$1 and id=$2",
         [org, campaign.id, run.id, run.defaultDatasetId ?? null],
@@ -157,6 +168,50 @@ export async function createSearch(
       )
     ).rows[0]!;
   });
+}
+/** A fonte gratuita resolve na hora (sem run assíncrono): geocodifica, consulta
+ *  o Overpass uma vez e grava os candidatos com `search_status='succeeded'`.
+ *  O cron (`synchronizeSearch`) pula campanhas sem `run_id`, então nada mais
+ *  precisa saber que esta busca foi síncrona. `cost_usd` fica nulo: custo zero. */
+async function buscarOsmAqui(
+  db: pg.PoolClient,
+  org: string,
+  campaign: Campaign,
+  search: SearchInput,
+) {
+  try {
+    const { prospects } = await buscarOsm(search.niche, search.location, search.limit);
+    let inserted = 0;
+    await db.query("begin");
+    try {
+      for (const p of prospects) {
+        const result = await db.query(
+          "insert into prospecting_candidates(organization_id,campaign_id,place_id,phone,data) values($1,$2,$3,$4,$5) on conflict do nothing",
+          [org, campaign.id, p.key, p.phone, p],
+        );
+        inserted += result.rowCount ?? 0;
+      }
+      await db.query(
+        "update prospecting_campaigns set search_status='succeeded',cost_usd=null,result_count=$3,skipped_count=$4,error=null,updated_at=now() where organization_id=$1 and id=$2",
+        [org, campaign.id, inserted, prospects.length - inserted],
+      );
+      await db.query("commit");
+    } catch (error) {
+      await db.query("rollback");
+      throw error;
+    }
+  } catch (error) {
+    await db.query(
+      "update prospecting_campaigns set search_status='unknown',error=$3,updated_at=now() where organization_id=$1 and id=$2",
+      [
+        org,
+        campaign.id,
+        error instanceof ProspectingError
+          ? error.message
+          : "Não foi possível concluir a busca gratuita. Tente de novo em alguns segundos.",
+      ],
+    );
+  }
 }
 export async function synchronizeSearch(db: pg.PoolClient, admin: SupabaseClient, c: Campaign) {
   if (!c.run_id) return;

@@ -824,7 +824,34 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
   "api.apify.com": {
     categoria: "FORNECEDOR",
     motivo:
-      "endpoint da plataforma que roda o crawler do Google Places (`lib/prospecting/provider.ts`). É o destino do request, com a chave da PRÓPRIA organização — trocar pelo domínio do revendedor quebraria a chamada, e esconder o nome não esconde para onde o dado vai.",
+      "endpoint da plataforma que roda o crawler do Google Places (`lib/prospecting/fontes/apify.ts`). É o destino do request, com a chave da PRÓPRIA organização — trocar pelo domínio do revendedor quebraria a chamada, e esconder o nome não esconde para onde o dado vai.",
+  },
+  // ── prospecção gratuita: mapa colaborativo, sem chave ──
+  "overpass-api.de": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "endpoint público do Overpass (OpenStreetMap) que devolve empresas por região (`lib/prospecting/fontes/osm.ts`). É o destino do request da fonte gratuita: não leva chave nenhuma, e trocar pelo domínio do revendedor faria a busca não chegar a lugar nenhum.",
+  },
+  "nominatim.openstreetmap.org": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "geocodificação gratuita do Nominatim (OpenStreetMap) que converte cidade/região em coordenadas (`lib/prospecting/fontes/osm.ts`). Sem chave, com User-Agent do produto por exigência da política de uso deles.",
+  },
+  "www.openstreetmap.org": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "link do pino no mapa que `lib/prospecting/fontes/osm.ts` monta para cada empresa encontrada na fonte gratuita: é o que o operador toca para ver o lugar. O dado vem do Overpass; trocar pelo domínio do revendedor não abriria mapa nenhum.",
+  },
+  // ── provedor de IA das verificações auxiliares (mineração de leads) ──
+  "api.groq.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "endpoint da API da Groq (`lib/agent-engine/edge/llm/providers.ts`, `lib/ai/runtime/agent.ts`, `lib/ai/provider-validators.ts`). É o destino do request, com a chave da PRÓPRIA organização — trocar pelo domínio do revendedor quebraria a chamada.",
+  },
+  "console.groq.com": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "painel onde o operador pega a chave dele (`lib/ai/pontos/provedores.ts`, campo `ondePegarAChave` da Groq). É o link que a tela mostra para buscar a credencial — painel do fornecedor, não texto de interface.",
   },
   // ── identificador de fio: NÃO é destino de chamada nem texto de tela ──────
   "s.whatsapp.net": {

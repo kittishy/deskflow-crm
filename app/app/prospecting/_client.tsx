@@ -99,6 +99,9 @@ export function ProspectingClient() {
   const [limit, setLimit] = useState(20);
   const [budget, setBudget] = useState(1);
   const [enrich, setEnrich] = useState(true);
+  // `osm` (padrão) é a fonte gratuita — OpenStreetMap, sem chave e sem custo.
+  // `apify` é a paga (Google Places), com a chave da organização.
+  const [fonte, setFonte] = useState<"osm" | "apify">("osm");
   const [campaignDrafts, setCampaignDrafts] = useState<Record<string, CampaignConfig>>({});
   const [manualCampaigns, setManualCampaigns] = useState<Record<string, boolean>>({});
   const [createdAgents, setCreatedAgents] = useState<{ id: string; name: string }[]>([]);
@@ -202,7 +205,7 @@ export function ProspectingClient() {
         </div>
       )}
       {!data && !query.error && <p role="status">{t("Carregando campanhas…")}</p>}
-      {(settings || data?.configured === false) && (
+      {(settings || data?.configured === false) && fonte === "apify" && (
         <Card className="p-5">
           <form
             className="flex flex-col gap-3 sm:flex-row sm:items-end"
@@ -246,7 +249,7 @@ export function ProspectingClient() {
               className="mt-4 space-y-4"
               onSubmit={async (e) => {
                 e.preventDefault();
-                const fingerprint = JSON.stringify([niche, location, limit, budget, enrich]);
+                const fingerprint = JSON.stringify([niche, location, limit, budget, enrich, fonte]);
                 if (searchAttempt.current?.fingerprint !== fingerprint)
                   searchAttempt.current = { fingerprint, id: randomId() };
                 const success = await perform(
@@ -260,6 +263,7 @@ export function ProspectingClient() {
                       limit,
                       budget_usd: budget,
                       enrich,
+                      fonte,
                     },
                   },
                   t("Solicitação registrada. Acompanhe o estado da busca nesta tela."),
@@ -296,6 +300,22 @@ export function ProspectingClient() {
                   className="mt-1"
                 />
               </div>
+              <div>
+                <Label htmlFor="prospecting-source">{t("Fonte da busca")}</Label>
+                <select
+                  id="prospecting-source"
+                  value={fonte}
+                  onChange={(e) => setFonte(e.target.value as "osm" | "apify")}
+                  className={`${selectClass} mt-1`}
+                >
+                  <option value="osm">
+                    {t("Gratuita — OpenStreetMap (sem chave, sem custo)")}
+                  </option>
+                  <option value="apify">
+                    {t("Apify — Google Maps (paga, precisa de chave)")}
+                  </option>
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="prospecting-limit">{t("Até quantas empresas")}</Label>
@@ -310,36 +330,48 @@ export function ProspectingClient() {
                     className="mt-1"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="prospecting-budget">{t("Teto da busca (US$)")}</Label>
-                  <Input
-                    id="prospecting-budget"
-                    type="number"
-                    min={0.5}
-                    max={10}
-                    step={0.5}
-                    value={budget}
-                    onChange={(e) => setBudget(Number(e.target.value))}
-                    required
+                {fonte === "apify" && (
+                  <div>
+                    <Label htmlFor="prospecting-budget">{t("Teto da busca (US$)")}</Label>
+                    <Input
+                      id="prospecting-budget"
+                      type="number"
+                      min={0.5}
+                      max={10}
+                      step={0.5}
+                      value={budget}
+                      onChange={(e) => setBudget(Number(e.target.value))}
+                      required
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+              </div>
+              {fonte === "apify" && (
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={enrich}
+                    onChange={(e) => setEnrich(e.target.checked)}
                     className="mt-1"
                   />
-                </div>
-              </div>
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={enrich}
-                  onChange={(e) => setEnrich(e.target.checked)}
-                  className="mt-1"
-                />
-                {t("Enriquecer com e-mails comerciais e redes encontradas no site")}
-              </label>
+                  {t("Enriquecer com e-mails comerciais e redes encontradas no site")}
+                </label>
+              )}
               <p className="text-xs text-muted-foreground">
-                {t(
-                  "A pesquisa usa seu saldo da Apify. A quantidade encontrada pode ser menor que o limite. Nenhuma abordagem começa nesta etapa.",
-                )}
+                {fonte === "osm"
+                  ? t(
+                      "A busca gratuita usa o OpenStreetMap: sem chave e sem custo. Traz nome, endereço e telefone quando o mapa tem; nota e avaliações não existem lá. Nenhuma abordagem começa nesta etapa.",
+                    )
+                  : t(
+                      "A pesquisa usa seu saldo da Apify. A quantidade encontrada pode ser menor que o limite. Nenhuma abordagem começa nesta etapa.",
+                    )}
               </p>
-              <Button className="w-full" type="submit" disabled={busy || !data?.configured}>
+              <Button
+                className="w-full"
+                type="submit"
+                disabled={busy || (fonte === "apify" && !data?.configured)}
+              >
                 {busy ? t("Aguarde…") : t("Buscar empresas")}
               </Button>
             </form>
@@ -766,13 +798,35 @@ export function ProspectingClient() {
                 )}
               {candidates.length > 0 && (
                 <Card className="overflow-hidden">
-                  <div className="border-b p-5">
-                    <h2 className="text-lg font-semibold">{t("3. Acompanhar resultados")}</h2>
-                    <p className="text-sm text-muted-foreground">
-                      {t(
-                        "Encontrado é diferente de qualificado. A qualificação depende do que for confirmado na conversa.",
-                      )}
-                    </p>
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b p-5">
+                    <div>
+                      <h2 className="text-lg font-semibold">{t("3. Acompanhar resultados")}</h2>
+                      <p className="text-sm text-muted-foreground">
+                        {t(
+                          "Encontrado é diferente de qualificado. A qualificação depende do que for confirmado na conversa.",
+                        )}
+                      </p>
+                    </div>
+                    {campaign && campaign.search_status === "succeeded" && !campaign.config && (manual || config.agent_id) && (
+                      <Button
+                        type="button"
+                        disabled={
+                          busy ||
+                          !agents.length ||
+                          !data?.channels.some((c) => c.status === "WORKING")
+                        }
+                        onClick={() =>
+                          void perform(
+                            { action: "start", id: campaign.id, config },
+                            t(
+                              "Campanha iniciada. A primeira abordagem será preparada após um minuto.",
+                            ),
+                          )
+                        }
+                      >
+                        {t("Iniciar abordagens com IA")}
+                      </Button>
+                    )}
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">

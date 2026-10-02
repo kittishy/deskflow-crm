@@ -22,6 +22,10 @@ export const searchSchema = z
     limit: z.number().int().min(1).max(100).default(20),
     budget_usd: z.number().min(0.5).max(10).default(1),
     enrich: z.boolean().default(true),
+    // `osm` (padrão) é a fonte gratuita — OpenStreetMap, sem chave e sem
+    // custo. `apify` é a paga (Google Places, com a chave da organização).
+    // `budget_usd` e `enrich` só valem para `apify`; na gratuita são ignorados.
+    fonte: z.enum(["osm", "apify"]).default("osm"),
   })
   .strict();
 export const prospectingInputSchema = z.discriminatedUnion("action", [
@@ -53,6 +57,13 @@ export interface Prospect {
   socials: string[];
 }
 
+/** Normaliza telefone brasileiro; nunca adivinha país estrangeiro. */
+export function normalizarTelefoneBr(raw: string): string | null {
+  const digits = raw.replace(/\D/g, "");
+  const comDdi = !raw.startsWith("+") && [10, 11].includes(digits.length) ? `55${digits}` : digits;
+  return /^55\d{10,11}$/.test(comDdi) ? `+${comDdi}` : null;
+}
+
 /** The existing Maps integrations normalize Brazilian numbers; never guess a foreign country. */
 export function normalizeProspect(item: Record<string, unknown>): Prospect | null {
   const str = (key: string, limit = 500) =>
@@ -62,9 +73,7 @@ export function normalizeProspect(item: Record<string, unknown>): Prospect | nul
   if (!name || !place || item.permanentlyClosed === true || item.temporarilyClosed === true)
     return null;
   const raw = str("phoneUnformatted") || str("phone") || "";
-  let digits = raw.replace(/\D/g, "");
-  if (!raw.startsWith("+") && [10, 11].includes(digits.length)) digits = `55${digits}`;
-  const phone = /^55\d{10,11}$/.test(digits) ? `+${digits}` : null;
+  const phone = normalizarTelefoneBr(raw);
   const urls = (key: string) =>
     Array.isArray(item[key])
       ? (item[key] as unknown[])
