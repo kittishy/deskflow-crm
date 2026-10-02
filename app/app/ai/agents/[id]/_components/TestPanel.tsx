@@ -141,6 +141,7 @@ export function TestPanel({ agent, draft, published, readOnly }: Props) {
   const [contactPhone, setContactPhone] = React.useState("");
   const [pending, setPending] = React.useState(false);
   const [result, setResult] = React.useState<TestResponse["data"] | null>(null);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   if (!target) {
     return (
@@ -163,6 +164,7 @@ export function TestPanel({ agent, draft, published, readOnly }: Props) {
     if (!target) return;
     setPending(true);
     setResult(null);
+    setErrorMessage(null);
     try {
       const body: Record<string, unknown> = { sample_message: message.trim() };
       if (contactName.trim() || contactPhone.trim()) {
@@ -190,10 +192,15 @@ export function TestPanel({ agent, draft, published, readOnly }: Props) {
       qc.invalidateQueries({ queryKey: agentRunsKey(agent.id) });
       toast.success(t("Teste executado."));
     } catch (err) {
+      const readableError =
+        err instanceof ApiError
+          ? t(err.message) || `${t("Erro")}: ${err.code}`
+          : t("Erro inesperado.");
+      setErrorMessage(readableError);
       if (err instanceof ApiError) {
-        toast.error(t(err.message) || `${t("Erro")}: ${err.code}`);
+        toast.error(readableError);
       } else {
-        toast.error(t("Erro inesperado."));
+        toast.error(readableError);
       }
     } finally {
       setPending(false);
@@ -269,7 +276,13 @@ export function TestPanel({ agent, draft, published, readOnly }: Props) {
           {t("Resultado")}
         </p>
 
-        {!result && !pending ? (
+        {errorMessage && !pending ? (
+          <p role="alert" data-testid="teste-erro-persistente" className="text-sm text-destructive">
+            {errorMessage}
+          </p>
+        ) : null}
+
+        {!result && !pending && !errorMessage ? (
           <p className="text-sm text-muted-foreground">{t("Nenhum teste executado ainda.")}</p>
         ) : null}
 

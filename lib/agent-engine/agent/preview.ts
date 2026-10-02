@@ -58,6 +58,31 @@ export function newPreviewResult(): PreviewResult {
   };
 }
 
+/** Run a text-only completion through the same before-send gate as send_message.
+ * This records only a candidate; it never invokes a channel executor. */
+export async function addPreviewTextCandidate(
+  p: TurnPreview,
+  body: string,
+  ctx: GateContext,
+  citations: () => Citation[],
+  semanticClassifier?: (body: string) => Promise<NonNullable<GateContext['semanticPromise']>>,
+  liveContext?: () => Partial<GateContext>,
+): Promise<void> {
+  const text = body.trim();
+  if (!text) return;
+  const result = evaluateBeforeSend({
+    ...ctx,
+    ...liveContext?.(),
+    body: text,
+    semanticPromise: semanticClassifier ? await semanticClassifier(text) : null,
+  });
+  if (result.veto) {
+    p.result.impediments.push({ code: result.veto.code, message: result.veto.message });
+    return;
+  }
+  p.result.candidates.push({ body: result.body, citations: citations(), trace: result.trace });
+}
+
 export async function previewGateContext(
   db: pg.Pool,
   p: TurnPreview,
@@ -175,24 +200,17 @@ export function applyPreviewPolicy(
                 args && typeof args === 'object' && 'body' in args && typeof args.body === 'string'
                   ? args.body
                   : '';
-              const result = evaluateBeforeSend({
-                ...ctx,
-                ...liveContext?.(),
-                body,
-                semanticPromise: semanticClassifier ? await semanticClassifier(body) : null,
-              });
-              if (result.veto) {
-                p.result.impediments.push({ code: result.veto.code, message: result.veto.message });
+              const before = p.result.candidates.length;
+              await addPreviewTextCandidate(p, body, ctx, citations, semanticClassifier, liveContext);
+              if (p.result.candidates.length === before) {
                 return {
                   ok: false,
-                  error: { code: result.veto.code, message: result.veto.message },
+                  error: {
+                    code: p.result.impediments.at(-1)?.code ?? 'empty_preview_candidate',
+                    message: p.result.impediments.at(-1)?.message ?? 'Resposta vazia.',
+                  },
                 };
               }
-              p.result.candidates.push({
-                body: result.body,
-                citations: citations(),
-                trace: result.trace,
-              });
               return {
                 ok: true,
                 status: p.kind === 'sandbox' ? 'simulated' : 'awaiting_approval',

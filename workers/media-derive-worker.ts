@@ -26,6 +26,7 @@ import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { motivoDaRecusaDeDestino } from "@/lib/automation/destinos-internos-autorizados";
 import { DETALHE_TECNICO } from "@/lib/event-log/aviso-de-evento-morto";
+import { assertFreeModel, freeOnlyForOrganization } from "@/lib/ai/free-only";
 
 export const MEDIA_DERIVE_CONSUMER_KEY = "media_derive_v1";
 const DRAIN_MAX_ATTEMPTS = 5; // espelho de lib/event-log/drain.ts
@@ -377,6 +378,18 @@ function buildDeriveDeps(
     return data?.supports_vision ?? null;
   };
   const describeImage: DeriveDeps["describeImage"] = async (buffer, mime) => {
+    if (freeOnlyForOrganization(orgId)) {
+      try {
+        assertFreeModel(orgId, llm.provider, llm.defaultModel ?? "", baseUrlDaVisao);
+      } catch {
+        await avisarMidiaNaoLida(
+          orgId,
+          "imagem",
+          "a leitura de imagem está bloqueada: a organização só permite modelos OpenRouter gratuitos no endpoint oficial",
+        );
+        return MARCADOR_NAO_LIDA;
+      }
+    }
     // ⚠️ A resposta é resolvida AQUI, não na montagem das deps, porque num
     // roteador ela depende do catálogo e a consulta é assíncrona. Antes disto
     // a pergunta ia direto ao registro, que num roteador responde pelo prefixo

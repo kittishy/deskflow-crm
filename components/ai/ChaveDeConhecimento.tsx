@@ -91,6 +91,17 @@ export function ChaveDeConhecimento({ estado, onChaveCadastrada }: Props) {
         ? t("Chave do Google")
         : t("Chave da OpenAI");
 
+  if (estado.somente_textual) {
+    return (
+      <div data-testid="conhecimento-busca-textual" className="flex items-center gap-2 text-xs text-text-muted">
+        <CheckCircle2 className="h-3.5 w-3.5 text-success-fg" aria-hidden />
+        <span>
+          {t("O acervo usa busca textual em português.")} {t("Esta organização não precisa de chave de embedding; a busca não usa embeddings pagos.")}
+        </span>
+      </div>
+    );
+  }
+
   async function cadastrar() {
     if (chave.trim().length < 8) {
       toast.error(t("Cole a chave inteira antes de salvar."));

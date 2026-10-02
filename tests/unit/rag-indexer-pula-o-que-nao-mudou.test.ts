@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { processRagIndexer } from "@/workers/rag-indexer";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { embedText } from "@/lib/ai/embed";
@@ -60,6 +60,7 @@ const EVENTO = {
 let fonte: Record<string, unknown>;
 let modeloDaVersaoAtiva: string;
 let carimbos: Array<Record<string, unknown>> = [];
+let chunksGravados: Array<Record<string, unknown>> = [];
 
 function fonteBase(): Record<string, unknown> {
   return {
@@ -90,6 +91,7 @@ beforeEach(() => {
   fonte = fonteBase();
   modeloDaVersaoAtiva = "openai/text-embedding-3-small";
   carimbos = [];
+  chunksGravados = [];
 
   vi.mocked(createAdminClient).mockReturnValue({
     from: (tabela: string) => {
@@ -114,7 +116,7 @@ beforeEach(() => {
       }
       if (tabela === "ai_faq_items") return leitura(() => FAQ);
       if (tabela === "ai_knowledge_versions") return leitura(() => ({ embedding_model: modeloDaVersaoAtiva }));
-      if (tabela === "ai_chunks") return { upsert: () => Promise.resolve({ error: null }) };
+      if (tabela === "ai_chunks") return { upsert: (row: Record<string, unknown>) => { chunksGravados.push(row); return Promise.resolve({ error: null }); } };
       throw new Error(`tabela não dublada no teste: ${tabela}`);
     },
   } as never);
@@ -125,7 +127,24 @@ beforeEach(() => {
   vi.mocked(createKnowledgeVersion).mockResolvedValue({ versionId: "v-1", versionNumber: 1 } as never);
 });
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe("rag-indexer — pulo incremental por hash do conteúdo", () => {
+  it("free-only indexa texto sem resolver chave nem chamar embedding", async () => {
+    vi.stubEnv("AI_FREE_ONLY_ORGANIZATION_IDS", "org-1");
+
+    const r = await processRagIndexer(EVENTO as never);
+
+    expect(r.status).toBe("ok");
+    expect(resolverChaveDeEmbedding).not.toHaveBeenCalled();
+    expect(embedText).not.toHaveBeenCalled();
+    expect(createKnowledgeVersion).toHaveBeenCalledWith(expect.objectContaining({
+      embeddingModel: "text-only", embeddingDims: 0,
+    }));
+    expect(chunksGravados.length).toBeGreaterThan(0);
+    expect(chunksGravados.every((chunk) => chunk.embedding === null)).toBe(true);
+  });
+
   it("conteúdo igual, já pronto e no mesmo modelo: pula, sem versão nem embedding, e mantém `success`", async () => {
     const hash = await indexarUmaVez();
     fonte = { ...fonteBase(), content_hash: hash, last_index_status: "success", active_kb_version_id: "v-1" };

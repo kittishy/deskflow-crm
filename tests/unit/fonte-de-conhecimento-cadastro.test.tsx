@@ -301,6 +301,18 @@ describe("KnowledgeSourceCard — só oferece controle onde existe ação", () =
 });
 
 describe("ChaveDeConhecimento — o beco vira saída", () => {
+  it("organização free-only informa busca textual sem pedir chave de embedding", () => {
+    render(
+      <ChaveDeConhecimento
+        estado={{ ...CHAVE_OK, somente_textual: true, pode_indexar: true, origem: null, chave_em_uso: null }}
+        onChaveCadastrada={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("conhecimento-busca-textual")).toHaveTextContent("busca textual");
+    expect(screen.queryByTestId("conhecimento-sem-chave")).toBeNull();
+    expect(screen.queryByText(/chave principal/i)).toBeNull();
+  });
+
   it("sem chave, avisa E oferece cadastrar ali mesmo", () => {
     render(
       <ChaveDeConhecimento

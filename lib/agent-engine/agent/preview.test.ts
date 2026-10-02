@@ -2,7 +2,7 @@ import { DEFAULT_CHANNEL_PROVIDER } from '@/lib/channels';
 import { describe, it, expect, vi } from 'vitest';
 import { tool } from '../edge/llm/run-model-call';
 import { z } from 'zod';
-import { applyPreviewPolicy, newPreviewResult, scenarioContext, type TurnPreview } from './preview';
+import { addPreviewTextCandidate, applyPreviewPolicy, newPreviewResult, scenarioContext, type TurnPreview } from './preview';
 import { evaluateBeforeSend, type GateContext } from '../guardrails/before-send';
 import { PACING_DEFAULTS } from '../pacing/defaults';
 import { SPINNING_DEFAULTS } from '../spinning/defaults';
@@ -46,6 +46,25 @@ async function execute(t: ReturnType<typeof applyPreviewPolicy>, name: string, a
   return t[name]!.execute!(args, { toolCallId: 'test', messages: [], context: undefined });
 }
 describe('preview policy shares gates and contains side effects', () => {
+  it('text-only completion from assisted mode becomes gated draft text without sending', async () => {
+    const p = preview();
+    p.kind = 'assisted';
+    const send = vi.fn();
+    await addPreviewTextCandidate(p, '  Olá, posso ajudar?  ', gate(), () => []);
+    expect(p.result.candidates).toHaveLength(1);
+    expect(p.result.candidates[0]?.body).toBe('Olá, posso ajudar?');
+    expect(send).not.toHaveBeenCalled();
+    expect(p.result.impediments).toEqual([]);
+  });
+
+  it('text-only completion is vetoed by the same before-send rules', async () => {
+    const p = preview();
+    p.kind = 'assisted';
+    await addPreviewTextCandidate(p, 'Olá, posso ajudar?', { ...gate(), optedOut: true }, () => []);
+    expect(p.result.candidates).toEqual([]);
+    expect(p.result.impediments[0]?.code).toBe(evaluateBeforeSend({ ...gate(), optedOut: true }).veto?.code);
+  });
+
   it('registers text and mutation proposals without calling either operational executor', async () => {
     const send = vi.fn(),
       write = vi.fn(),

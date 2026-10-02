@@ -22,10 +22,11 @@ export function assertFreeModel(
   baseUrl?: string | null,
 ): void {
   if (!freeOnlyForOrganization(organizationId)) return;
+  const endpoint = baseUrl ?? process.env.OPENROUTER_BASE_URL?.trim() ?? 'https://openrouter.ai/api/v1';
   if (
     provider !== 'openrouter' ||
     !model.endsWith(':free') ||
-    (baseUrl != null && baseUrl !== 'https://openrouter.ai/api/v1')
+    endpoint !== 'https://openrouter.ai/api/v1'
   ) {
     throw new AiFreeOnlyError();
   }

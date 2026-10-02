@@ -38,6 +38,7 @@ type Resultado = {
   melhorSimilaridade: number | null;
   motivo: string | null;
   acervo: { fontes: number; limiar: number };
+  modo?: "vetorial" | "textual";
 };
 
 /** Similaridade de cosseno em [0,1] → percentual legível de verdade. */
@@ -135,12 +136,16 @@ export function AcervoSearch() {
                         {tr.source_name}
                       </Badge>
                     )}
-                    <span
-                      className="shrink-0 text-muted-foreground"
-                      title={t("Semelhança com a pergunta")}
-                    >
-                      {percentual(tr.similarity)}
-                    </span>
+                    {resultado.modo === "textual" ? (
+                      <span className="shrink-0 text-muted-foreground">{t("Correspondência textual")}</span>
+                    ) : (
+                      <span
+                        className="shrink-0 text-muted-foreground"
+                        title={t("Semelhança com a pergunta")}
+                      >
+                        {percentual(tr.similarity)}
+                      </span>
+                    )}
                   </div>
                   <p className="whitespace-pre-wrap break-words text-foreground">{tr.content}</p>
                 </li>
@@ -154,8 +159,9 @@ export function AcervoSearch() {
           )}
 
           <p className="text-[10px] text-muted-foreground" data-testid="acervo-resumo">
-            {t("Materiais consultados")}: {resultado.acervo.fontes} ·{" "}
-            {t("limiar")}: {percentual(resultado.acervo.limiar)}
+            {resultado.modo === "textual"
+              ? t("Busca textual em português; resultados ordenados por correspondência.")
+              : <>{t("Materiais consultados")}: {resultado.acervo.fontes} · {t("limiar")}: {percentual(resultado.acervo.limiar)}</>}
           </p>
         </div>
       )}

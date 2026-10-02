@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const downloadMock = vi.fn();
 const updateEqMock = vi.fn();
@@ -132,6 +132,7 @@ function eventRow(attempts = 0) {
 }
 
 describe("deriveMessageMedia", () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     downloadMock.mockReset().mockResolvedValue({ data: new Blob([new Uint8Array([1, 2, 3])]), error: null });
     updateEqMock.mockReset();
@@ -182,6 +183,24 @@ describe("deriveMessageMedia", () => {
     expect(updateEqMock).toHaveBeenCalledWith(
       expect.objectContaining({ media_derived_text: "transcrição do áudio real", media_derived_status: "ready" }),
     );
+  });
+
+  it("free-only recusa visão se o modelo resolvido não é OpenRouter gratuito", async () => {
+    vi.stubEnv("AI_FREE_ONLY_ORGANIZATION_IDS", "org1");
+    messageRow.type = "image";
+    messageRow.media_mime = "image/jpeg";
+    vi.mocked(deriveMediaText).mockImplementationOnce(async (_kind, buffer, mime, deps) =>
+      deps.describeImage(buffer, mime),
+    );
+
+    const r = await deriveMessageMedia(eventRow());
+
+    expect(r.status).toBe("ok");
+    expect(updateEqMock).toHaveBeenCalledWith(expect.objectContaining({
+      media_derived_text: MARCADOR_NAO_LIDA,
+      media_derived_status: "ready",
+    }));
+    expect(inboxInsertMock).toHaveBeenCalledOnce();
   });
 
   it("pula se já derivado (idempotência)", async () => {

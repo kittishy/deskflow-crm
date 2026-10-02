@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 import { requireRole } from "@/lib/auth/require-role";
@@ -111,6 +111,7 @@ beforeEach(() => {
   } as never);
   vi.mocked(createClient).mockReset();
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe("perguntar ao acervo", () => {
   it("distingue acervo VAZIO de acervo sem a resposta", async () => {
@@ -169,6 +170,33 @@ describe("perguntar ao acervo", () => {
     const rpc = db.__rpc as Array<{ args: { p_organization_id: string } }>;
     expect(rpc).toHaveLength(1);
     expect(rpc[0]?.args.p_organization_id).toBe(ORG_DA_SESSAO);
+  });
+
+  it("free-only usa RPC textual tenant/source-scoped sem gerar embedding", async () => {
+    vi.stubEnv("AI_FREE_ONLY_ORGANIZATION_IDS", ORG_DA_SESSAO);
+    const db = supabaseFalso({
+      linhas: [
+        { chunk_id: "chunk-textual", knowledge_source_id: FONTE, source_name: "Preços", content: "Criação de site: R$ 479.", similarity: 0.23 },
+      ],
+    });
+    vi.mocked(createClient).mockResolvedValue(db as never);
+    const res = await resultadoDe({ pergunta: "qual o preço de criar um site?" });
+    const corpo = (await res.json()) as { data: { modo: string; trechos: Linha[] } };
+    expect(corpo.data.modo).toBe("textual");
+    expect(corpo.data.trechos[0]?.content).toContain("R$ 479");
+    const { embedText } = await import("@/lib/ai/embed");
+    expect(vi.mocked(embedText)).not.toHaveBeenCalled();
+    const rpc = db.__rpc as Array<{ nome: string; args: Record<string, unknown> }>;
+    expect(rpc).toEqual([
+      {
+        nome: "fn_buscar_trechos_textuais_das_fontes",
+        args: expect.objectContaining({
+          p_organization_id: ORG_DA_SESSAO,
+          p_source_ids: [FONTE],
+          p_query: "qual o preço de criar um site?",
+        }),
+      },
+    ]);
   });
 
   it("apara a quantidade entre 1 e 10", async () => {

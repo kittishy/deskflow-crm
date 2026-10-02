@@ -22,6 +22,12 @@ describe('free-only por organizacao', () => {
   });
   it('permite rota gratuita canonica', () => {
     vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', 'org');
+    vi.stubEnv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1');
     expect(() => assertFreeModel('org', 'openrouter', 'qwen/model:free')).not.toThrow();
+  });
+  it('nega baseURL de instalação customizada mesmo sem baseURL no binding', () => {
+    vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', 'org');
+    vi.stubEnv('OPENROUTER_BASE_URL', 'https://gateway.example/v1');
+    expect(() => assertFreeModel('org', 'openrouter', 'qwen/model:free')).toThrow('ai_free_only');
   });
 });

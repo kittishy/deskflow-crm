@@ -7,6 +7,7 @@
  * refetch.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { freeOnlyForOrganization } from "@/lib/ai/free-only";
 
 import {
   EXPLICACAO_DA_ORIGEM,
@@ -18,6 +19,8 @@ import {
 } from "@/lib/ai/embeddings/chave";
 
 export interface EstadoDaChave {
+  /** A organização prepara e consulta o acervo por full-text, sem embedding pago. */
+  somente_textual?: boolean;
   pode_indexar: boolean;
   origem: string | null;
   explicacao: string | null;
@@ -51,6 +54,21 @@ export async function montarEstadoDaChave(
   supabase: SupabaseClient,
   organizationId: string,
 ): Promise<EstadoDaChave> {
+  if (freeOnlyForOrganization(organizationId)) {
+    return {
+      somente_textual: true,
+      pode_indexar: true,
+      origem: null,
+      explicacao: "A organização usa busca textual em português, sem chave de embedding.",
+      chave_em_uso: null,
+      avisos: [],
+      provedor: null,
+      familia_sem_chave: null,
+      pode_trocar_para: null,
+      credenciais_embedding: [],
+    };
+  }
+
   // A tela é INFORMAÇÃO: se a família não pôde ser lida, ela ainda mostra a
   // chave e diz que não sabe o provedor — sem oferecer troca nenhuma.
   let familia: ProvedorDaBase | null = null;

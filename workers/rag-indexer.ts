@@ -56,11 +56,13 @@ import {
 import type { EventRow, HandlerResult } from "@/lib/event-log/dispatcher";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NuvemshopApiClient } from "@/lib/nuvemshop/api-client";
+import { freeOnlyForOrganization } from "@/lib/ai/free-only";
 
 const DEBOUNCE_TTL_SEC = 30;
 const LAG_WARN_MS = 5 * 60 * 1000;
 /** Sem chave, o evento volta daqui a uma hora. Tempo de alguém cadastrar. */
 const RETRY_SEM_CHAVE_MS = 60 * 60 * 1000;
+const MODELO_SO_TEXTO = "text-only";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -332,7 +334,7 @@ async function credenciaisDaLoja(
  */
 export async function indexarFonte(
   fonte: FonteRow,
-  chave: ChaveDeEmbedding,
+  chave: ChaveDeEmbedding | null,
   extra: { productId?: string },
 ): Promise<Resultado> {
   const tipo = canonizarTipoDeFonte(fonte.source_type);
@@ -386,7 +388,11 @@ export async function indexarFonte(
   // o MESMO modelo de embedding, não há nada a fazer — e "Preparar tudo" deixa de
   // reembedar o que não mudou. Trocar de modelo cai fora da condição e reindexa:
   // é isto que faz a troca de provedor refazer a base inteira.
-  const modelo = modeloDeEmbedding(chave.provedor);
+  const somenteTexto = freeOnlyForOrganization(fonte.organization_id);
+  if (!somenteTexto && chave === null) {
+    return { tipo: "erro", detalhe: "chave_de_embedding_ausente" };
+  }
+  const modelo = somenteTexto ? MODELO_SO_TEXTO : modeloDeEmbedding(chave!.provedor);
   const hashDoConteudo = computeContentHash(pedacos.map((p) => p.content).join("\n---\n"));
   if (
     fonte.content_hash === hashDoConteudo &&
@@ -410,6 +416,7 @@ export async function indexarFonte(
     agentId: fonte.agent_id,
     sourceType: tipo,
     embeddingModel: modelo,
+    ...(somenteTexto ? { embeddingDims: 0 } : {}),
   });
 
   console.warn(
@@ -424,19 +431,21 @@ export async function indexarFonte(
 
   for (let i = 0; i < pedacos.length; i++) {
     const p = pedacos[i]!;
-    let embedding: number[];
-    try {
-      // `chave` já resolvida: sem isto, um documento de 200 trechos decifraria a
-      // credencial 200 vezes.
-      const r = await embedText(p.content, {
-        organizationId: fonte.organization_id,
-        chave,
-      });
-      embedding = r.embedding;
-    } catch (err) {
-      const detalhe = err instanceof Error ? err.message : String(err);
-      await markVersionFailed(versionId, fonte.organization_id, `embed@${i}: ${detalhe}`);
-      return { tipo: "erro", detalhe: `embedding falhou no trecho ${i}: ${detalhe}` };
+    let embedding: number[] | null = null;
+    if (!somenteTexto) {
+      try {
+        // `chave` já resolvida: sem isto, um documento de 200 trechos decifraria a
+        // credencial 200 vezes.
+        const r = await embedText(p.content, {
+          organizationId: fonte.organization_id,
+          chave: chave!,
+        });
+        embedding = r.embedding;
+      } catch (err) {
+        const detalhe = err instanceof Error ? err.message : String(err);
+        await markVersionFailed(versionId, fonte.organization_id, `embed@${i}: ${detalhe}`);
+        return { tipo: "erro", detalhe: `embedding falhou no trecho ${i}: ${detalhe}` };
+      }
     }
 
     const { error: upErr } = await admin.from("ai_chunks").upsert(
@@ -448,7 +457,7 @@ export async function indexarFonte(
         content: p.content,
         content_hash: computeContentHash(p.content),
         token_count: estimateTokens(p.content),
-        embedding: embedding as unknown as string,
+        embedding: embedding === null ? null : embedding as unknown as string,
         metadata: p.metadata,
       },
       // A constraint que EXISTE é `ai_chunks_position_unique`
@@ -593,8 +602,9 @@ export async function processRagIndexer(row: EventRow): Promise<HandlerResult> {
     }
 
     // A chave é resolvida UMA vez por indexação — não uma vez por trecho.
-    const chave = await resolverChaveDeEmbedding(row.organization_id, "embedding_indexar");
-    if (!chave) {
+    const somenteTexto = freeOnlyForOrganization(row.organization_id);
+    const chave = somenteTexto ? null : await resolverChaveDeEmbedding(row.organization_id, "embedding_indexar");
+    if (!somenteTexto && !chave) {
       await marcarFonte(row.organization_id, fonte.id, {
         last_index_status: "sem_credencial",
         last_index_error:

@@ -30,6 +30,8 @@ export interface CreateVersionParams {
    * usou o Google faria a busca recusar os próprios trechos.
    */
   embeddingModel: string;
+  /** Zero marks a text-only index; omitted preserves vector dimensions. */
+  embeddingDims?: number;
 }
 
 export interface CreateVersionResult {
@@ -77,7 +79,7 @@ export async function createKnowledgeVersion(
       // Proveniência: sem ela, "indexado com um modelo e consultado com outro"
       // é a falha que responde com trecho errado e nota alta.
       embedding_model: params.embeddingModel,
-      embedding_dims: DIMENSOES_DO_EMBEDDING,
+      embedding_dims: params.embeddingDims ?? DIMENSOES_DO_EMBEDDING,
     })
     .select("id, version_number")
     .single();

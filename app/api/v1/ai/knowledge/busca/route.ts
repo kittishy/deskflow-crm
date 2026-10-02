@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { SemChaveDeEmbeddingError } from "@/lib/ai/embed";
+import { freeOnlyForOrganization } from "@/lib/ai/free-only";
 import { requireRole } from "@/lib/auth/require-role";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import {
@@ -163,6 +164,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         {
           trechos: [],
           melhorSimilaridade: null,
+          modo: freeOnlyForOrganization(organizationId) ? "textual" : "vetorial",
           motivo: t("Este acervo ainda não tem material publicado."),
           acervo: { fontes: 0, limiar },
         },
@@ -203,6 +205,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       {
         trechos: resultado.trechos,
         melhorSimilaridade: melhor,
+        modo: resultado.modo ?? "vetorial",
         motivo,
         acervo: { fontes: knowledgeSourceIds.length, limiar },
       },
