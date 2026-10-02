@@ -28,8 +28,8 @@ const CSS = fs.readFileSync(path.join(RAIZ, "app/globals.css"), "utf8");
  *
  * Copiar à mão criaria uma segunda fonte da verdade que envelhece em silêncio: quem
  * mexesse na paleta do design system veria este teste verde contra a paleta de ontem, e
- * a catraca deixaria de calibrar contra a régua. Lendo do arquivo, mudar a Sage quebra
- * este teste — que é exatamente o aviso que se quer.
+ * a catraca deixaria de calibrar contra a régua. Lendo do arquivo, mudar a paleta da
+ * marca quebra este teste — que é exatamente o aviso que se quer.
  */
 /**
  * O bloco `:root` sai por casamento de chaves, e não por `slice` entre duas
@@ -48,7 +48,7 @@ function blocoRoot(css: string): string {
   return css.slice(i, fim);
 }
 
-function stopsSageDoCss(): string[] {
+function stopsDaMarcaDoCss(): string[] {
   const raiz = blocoRoot(CSS);
   return GRAUS.map((g) => {
     const m = new RegExp(`--color-accent-${g}:\\s*(#[0-9a-f]{6})`, "i").exec(raiz);
@@ -65,7 +65,7 @@ const distanciaPorCanal = (a: string, b: string): number => {
 
 describe("conversões de cor", () => {
   it("faz ida-e-volta hex → OKLab → hex sem perder mais que 1/255", () => {
-    for (const hex of ["#506d48", "#f5c518", "#0f172a", "#ffffff", "#000000", "#7c3aed"]) {
+    for (const hex of ["#b83d1b", "#f5c518", "#0f172a", "#ffffff", "#000000", "#7c3aed"]) {
       const volta = linearParaHex(oklabParaLinear(hexParaOklab(hex)));
       expect(distanciaPorCanal(hex, volta), `${hex} → ${volta}`).toBeLessThanOrEqual(1);
     }
@@ -73,7 +73,7 @@ describe("conversões de cor", () => {
 
   it("aceita as quatro formas de hex e recusa o resto", () => {
     expect(normalizarHex("#ABC")).toBe("#aabbcc");
-    expect(normalizarHex("506d48")).toBe("#506d48");
+    expect(normalizarHex("b83d1b")).toBe("#b83d1b");
     expect(ehHexValido("#12345")).toBe(false);
     // Lançar é deliberado: engolir lixo devolveria preto silencioso e a marca do cliente
     // sumiria sem ninguém saber por quê.
@@ -103,18 +103,18 @@ describe("conversões de cor", () => {
 });
 
 describe("rampaDeSemente — catraca de calibração contra o design system", () => {
-  const esperados = stopsSageDoCss();
+  const esperados = stopsDaMarcaDoCss();
 
   it("lê 11 stops distintos do globals.css (guarda de vacuidade)", () => {
     // Sem isto, um regex quebrado devolveria lista vazia e a comparação abaixo passaria
     // por não ter o que comparar — instrumento morto tem cara de teste verde.
     expect(esperados).toHaveLength(11);
     expect(new Set(esperados).size).toBe(11);
-    expect(esperados[K]).toBe("#506d48");
+    expect(esperados[K]).toBe("#b83d1b");
   });
 
-  it("reproduz os 11 stops Sage a partir de #506d48 com Δ ≤ 2/255 por canal", () => {
-    const derivada = rampaDeSemente("#506d48");
+  it("reproduz os 11 stops da marca a partir de #b83d1b com Δ ≤ 2/255 por canal", () => {
+    const derivada = rampaDeSemente("#b83d1b");
     const distancias = esperados.map((esperado, i) => distanciaPorCanal(esperado, derivada[i]!));
     expect(
       Math.max(...distancias),
@@ -124,8 +124,8 @@ describe("rampaDeSemente — catraca de calibração contra o design system", ()
 
   it("devolve o hex LITERAL no stop da semente", () => {
     // Ida-e-volta por OKLab erra ±1/255. Mostrar `#516d49` no seletor de cor enquanto a
-    // UI pinta `#506d48` custa mais confiança do que o pixel vale.
-    for (const semente of ["#506d48", "#f5c518", "#0f172a", "#e11d48"]) {
+    // UI pinta `#b83d1b` custa mais confiança do que o pixel vale.
+    for (const semente of ["#b83d1b", "#f5c518", "#0f172a", "#e11d48"]) {
       expect(rampaDeSemente(semente)[K]).toBe(semente);
     }
   });
@@ -185,7 +185,7 @@ describe("ancoragem por PAPEL, não por lightness", () => {
 describe("forma da escada", () => {
   it("mantém as constantes na forma que a derivação assume", () => {
     // Sabotar qualquer uma destas quebra a calibração acima; estas asserções existem
-    // para dizer QUAL invariante quebrou, e não só que "a Sage não bate mais".
+    // para dizer QUAL invariante quebrou, e não só que "a paleta não bate mais".
     expect(ESCADA_L).toHaveLength(11);
     expect(CURVA_C).toHaveLength(11);
     expect(CURVA_C[K]).toBe(1);
