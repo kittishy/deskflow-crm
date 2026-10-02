@@ -26,6 +26,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, stepCountIs, type LanguageModel, type StopCondition, type ToolSet } from "ai";
+import { assertFreeModel } from "@/lib/ai/free-only";
 
 // Fonte única do endpoint — a mesma constante que o registry de produção usa.
 // Repetir a URL aqui criaria dois lugares para consertar quando ela mudar.
@@ -34,6 +35,7 @@ import {
   DEEPSEEK_ENDPOINT,
   GROQ_ENDPOINT,
   OPENROUTER_ENDPOINT,
+  OPENCODE_ZEN_ENDPOINT,
   REQUESTY_ENDPOINT,
 } from "@/lib/agent-engine/edge/llm/providers";
 import { CredentialUnavailableError, loadCredential } from "@/lib/ai/credentials";
@@ -206,6 +208,9 @@ export function buildModel(
     // o ensaio recusaria um provedor que a tela oferece e o worker executa.
     case "groq":
       return createOpenAI({ apiKey, baseURL: GROQ_ENDPOINT }).chat(modelId);
+    // OpenCode Zen publica Space Bunny/LongCat gratuitos via Chat Completions.
+    case "opencode":
+      return createOpenAI({ apiKey, baseURL: OPENCODE_ZEN_ENDPOINT }).chat(modelId);
     // Provedor personalizado (#1642): o endereço vem da credencial, junto da
     // chave. SEM endereço a chamada é RECUSADA — ensaio que fosse para a
     // OpenAI com a chave de um gateway privado diria que o produto não
@@ -535,6 +540,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       : [];
 
     // 9) Build LM directly against the provider (BYOK credential — see buildModel doc).
+    assertFreeModel(run.organization_id, version.provider, version.model, credentialBaseUrl);
     const model = buildModel(version.provider, credentialApiKey, version.model, credentialBaseUrl);
 
     // 10) Cost/token guard. Fires BEFORE the next step is taken.

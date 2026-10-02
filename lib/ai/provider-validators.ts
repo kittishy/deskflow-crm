@@ -12,6 +12,7 @@ import { baseDaApiDoJev } from "@/lib/ai/decisao/cliente";
 import type { ProvedorComChave } from "@/lib/ai/pontos/provedores";
 import { motivoDaRecusaDeDestino } from "@/lib/automation/destinos-internos-autorizados";
 import { env } from "@/lib/env";
+import { OPENCODE_ZEN_FREE_MODELS } from "@/lib/ai/free-only";
 
 export interface ValidationOk {
   ok: true;
@@ -305,6 +306,52 @@ export async function validateGroqKey(apiKey: string): Promise<ValidationResult>
 }
 
 /**
+ * Zen expõe um catálogo público, mas só devolvemos os dois modelos gratuitos
+ * aprovados pelo CRM. A validação faz uma única inferência mínima gratuita para
+ * provar a chave; ela usa apenas uma instrução fictícia, sem dados do cliente.
+ */
+export async function validateOpenCodeKey(apiKey: string): Promise<ValidationResult> {
+  try {
+    // `/models` é público e responde 200 mesmo com token inválido. Ele escolhe
+    // qual dos dois modelos seguros testar, mas só uma inferência fictícia
+    // prova a credencial. Não tentamos modelo pago ou contribuinte.
+    const catalogo = await timedFetch("https://opencode.ai/zen/v1/models", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!catalogo.ok) return { ok: false, error: `provider_status_${catalogo.status}` };
+    const json = (await catalogo.json()) as { data?: { id?: string }[] };
+    const disponiveis = new Set((json.data ?? []).map((model) => model.id).filter(Boolean));
+    const models = OPENCODE_ZEN_FREE_MODELS.filter((model) => disponiveis.has(model));
+    const modeloDeProva = models[0];
+    if (!modeloDeProva) return { ok: false, error: "free_models_unavailable" };
+
+    const prova = await timedFetch("https://opencode.ai/zen/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modeloDeProva,
+        messages: [{ role: "user", content: "Reply exactly: OK" }],
+        max_tokens: 1,
+        stream: false,
+      }),
+    }, TIMEOUT_MS_CUSTOM);
+    if (prova.status === 401 || prova.status === 403) {
+      return { ok: false, error: "auth_failed_401" };
+    }
+    if (!prova.ok) {
+      return { ok: false, error: `provider_status_${prova.status}` };
+    }
+    return { ok: true, models: [...models] };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.name : "network_error" };
+  }
+}
+
+/**
  * O Jev (TypeSafe AI) prova a chave pelo `GET /v1/models`, que EXIGE a
  * credencial (medido: 401 com chave falsa, 403 sem chave, 200 com a real) e não
  * gasta token. O formato do catálogo é `{ models: [{ name }] }`, diferente do
@@ -417,6 +464,8 @@ export function validateProviderKey(
       return validateRequestyKey(apiKey);
     case "groq":
       return validateGroqKey(apiKey);
+    case "opencode":
+      return validateOpenCodeKey(apiKey);
     case "custom":
       return validateCustomKey(apiKey, baseUrl);
     case "typesafe":

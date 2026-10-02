@@ -27,7 +27,8 @@ import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 
 import { openRouterFetch } from "./openrouter-reasoning";
-import { DEEPSEEK_ENDPOINT, REQUESTY_ENDPOINT } from "@/lib/agent-engine/edge/llm/providers";
+import { DEEPSEEK_ENDPOINT, GROQ_ENDPOINT, OPENCODE_ZEN_ENDPOINT, REQUESTY_ENDPOINT } from "@/lib/agent-engine/edge/llm/providers";
+import { allowlistedFetch, buildAllowlist } from "@/lib/agent-engine/edge/egress";
 import { fetchParaDestinoDaOrganizacao } from "@/lib/automation/destinos-internos-autorizados";
 import { decryptKey, byteaToBuffer } from "@/lib/crypto/aes_gcm";
 import { logger } from "@/lib/logger";
@@ -85,11 +86,15 @@ export async function resolverModeloDoPonto(
   if (freeOnlyForOrganization(organizationId)) {
     if (binding === null) {
       const providerDaOrg = await providerDaOrganizacao(organizationId);
-      if (providerDaOrg !== "openrouter") throw new AiFreeOnlyError();
+      if (
+        providerDaOrg !== "openrouter" &&
+        providerDaOrg !== "opencode" &&
+        providerDaOrg !== "groq"
+      ) throw new AiFreeOnlyError();
       const credencialDaOrg = await credencialDaOrganizacao(organizationId);
       const padraoDaOrg = await padraoDaOrganizacao(organizationId, credencialDaOrg);
       if (padraoDaOrg === null) throw new AiFreeOnlyError();
-      assertFreeModel(organizationId, 'openrouter', padraoDaOrg.modelId);
+      assertFreeModel(organizationId, providerDaOrg, padraoDaOrg.modelId);
       return padraoDaOrg;
     }
     assertFreeModel(organizationId, binding.provider, binding.model_id, binding.base_url);
@@ -203,7 +208,7 @@ async function lerBinding(
 function idParaOProvider(provider: string, id: string): string | null {
   // Os roteadores levam o prefixo inteiro — inclusive o provedor personalizado
   // (#1642), que serve id de QUALQUER fabricante atrás do próprio endpoint.
-  if (provider === "openrouter" || provider === "requesty" || provider === "custom")
+  if (provider === "openrouter" || provider === "groq" || provider === "requesty" || provider === "custom")
     return id;
   if (!id.includes("/")) return id;
   if (id.startsWith(`${provider}/`)) return id.slice(provider.length + 1);
@@ -323,6 +328,7 @@ async function padraoDaOrganizacao(
   const defaultModel = await modeloDoProvedor(organizationId, llm.provider, llm.defaultModel);
   const modelId =
     llm.provider === "openrouter" ||
+    llm.provider === "groq" ||
     llm.provider === "requesty" ||
     llm.provider === "custom" ||
     defaultModel.startsWith(`${llm.provider}/`)
@@ -566,6 +572,20 @@ function instanciar(
       return createGoogleGenerativeAI({ apiKey })(modelId);
     case "openrouter":
       return createOpenAI({ apiKey, baseURL: baseUrl ?? OPENROUTER_BASE_URL, fetch: openRouterFetch(fetch, baseUrl ?? OPENROUTER_BASE_URL) }).chat(modelId); // ver providers.ts
+    case "groq": {
+      const endpoint = GROQ_ENDPOINT;
+      const allowlist = buildAllowlist([endpoint]);
+      const contido = (input: string | URL | Request, init?: RequestInit) =>
+        allowlistedFetch(input instanceof Request ? input.url : input, init, { allowlist });
+      return createOpenAI({ apiKey, baseURL: endpoint, fetch: contido }).chat(modelId);
+    }
+    case "opencode": {
+      const endpoint = OPENCODE_ZEN_ENDPOINT;
+      const allowlist = buildAllowlist([endpoint]);
+      const contido = (input: string | URL | Request, init?: RequestInit) =>
+        allowlistedFetch(input instanceof Request ? input.url : input, init, { allowlist });
+      return createOpenAI({ apiKey, baseURL: endpoint, fetch: contido }).chat(modelId);
+    }
     // A DeepSeek fala a API da OpenAI. Sem este caso, uma organização em
     // DeepSeek cairia no `default` (null) e a pilha antiga seguiria para o
     // padrão com aviso — a tela ofereceria um provedor que estes workers ignoram.

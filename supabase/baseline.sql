@@ -45232,6 +45232,32 @@ on conflict (provider, model_id) do update set
   supports_tools = excluded.supports_tools,
   supports_vision = excluded.supports_vision;
 
+-- ---- Catálogo OpenCode Zen gratuito (migration 0505) ----
+-- Só os modelos declarados temporariamente gratuitos, sem retenção e sem
+-- treinamento. Sem tools, Muse Contributor, trial NVIDIA ou modelos pagos.
+insert into public.ai_models
+  (provider, model_id, display_name, description, context_window,
+   input_price_per_million_cents, output_price_per_million_cents,
+   supports_tools, supports_vision, metadata)
+values
+  ('opencode', 'space-bunny-free', 'Space Bunny Free (OpenCode)',
+   'Contingência gratuita temporária, com retenção zero e sem treinamento. Não executa ferramentas do CRM.',
+   null, 0, 0, false, false,
+   '{"temporario": true, "retencao_zero": true, "treinamento": false}'::jsonb),
+  ('opencode', 'longcat-2.5-preview-free', 'LongCat 2.5 Preview Free (OpenCode)',
+   'Contingência gratuita temporária, com retenção zero e sem treinamento. Preview; não executa ferramentas do CRM.',
+   null, 0, 0, false, false,
+   '{"temporario": true, "retencao_zero": true, "treinamento": false, "preview": true}'::jsonb)
+on conflict (provider, model_id) do update set
+  display_name = excluded.display_name,
+  description = excluded.description,
+  context_window = excluded.context_window,
+  input_price_per_million_cents = excluded.input_price_per_million_cents,
+  output_price_per_million_cents = excluded.output_price_per_million_cents,
+  supports_tools = excluded.supports_tools,
+  supports_vision = excluded.supports_vision,
+  metadata = excluded.metadata;
+
 -- ---- menu lateral por EMPRESA (migration 0367, issue #1341) ----
 --
 -- `organizations.interface_settings` é a escolha da EMPRESA: o universo de portas

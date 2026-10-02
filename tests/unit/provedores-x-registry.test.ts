@@ -65,6 +65,15 @@ describe("a OpenRouter entrou de fato", () => {
   });
 });
 
+describe("OpenCode Zen como provedor de contingência gratuito", () => {
+  it("está na lista, no registry e usa somente os modelos chat gratuitos", () => {
+    expect(ehProvedorSuportado("opencode")).toBe(true);
+    expect(registry["opencode"]).toBeTypeOf("function");
+    expect(PROVEDOR_POR_ID.get("opencode")?.catalogoSincronizavel).toBe(false);
+    expect(registry["opencode"]!("chave-de-teste", "space-bunny-free")).toBeDefined();
+  });
+});
+
 describe("forma de cada provedor", () => {
   it("cada um explica quando usar, em português de gente", () => {
     for (const p of PROVEDORES) {

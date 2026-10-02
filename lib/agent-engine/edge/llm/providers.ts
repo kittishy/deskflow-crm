@@ -72,6 +72,9 @@ export const REQUESTY_ENDPOINT = 'https://router.requesty.ai/v1';
  */
 export const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1';
 
+/** OpenCode Zen — o free-only guard restringe os modelos a allowlist explícita. */
+export const OPENCODE_ZEN_ENDPOINT = 'https://opencode.ai/zen/v1';
+
 /**
  * Cabeçalhos OPCIONAIS de atribuição da OpenRouter.
  *
@@ -323,6 +326,14 @@ export function createDefaultRegistry(opts?: {
     groq: (apiKey, modelId, baseUrl) => {
       const endpoint = baseUrl ?? GROQ_ENDPOINT;
       return createOpenAI({ apiKey, baseURL: endpoint, fetch: contain(endpoint) }).chat(modelId);
+    },
+    /** OpenCode Zen fala Chat Completions para Space Bunny/LongCat. */
+    opencode: (apiKey, modelId) => {
+      return createOpenAI({
+        apiKey,
+        baseURL: OPENCODE_ZEN_ENDPOINT,
+        fetch: contain(OPENCODE_ZEN_ENDPOINT),
+      }).chat(modelId);
     },
     /**
      * Provedor personalizado (#1642): o endpoint É DO OPERADOR e vem na

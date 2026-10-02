@@ -588,6 +588,17 @@ describe('politica free-only no gateway real', () => {
       expect((await resolverModeloDoPonto('sentiment_classify', ORG, 'anthropic/claude-haiku-4-5'))?.modelId).toBe('qwen/model:free');
     } finally { vi.unstubAllEnvs(); }
   });
+  it('executa binding Groq somente pelo endpoint gratuito autorizado', async () => {
+    vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', ORG);
+    bindings.linha = { provider: 'groq', credential_id: 'cred-groq', model_id: 'openai/gpt-oss-120b', base_url: null };
+    credenciais.linha = { api_key_encrypted: 'x', api_key_iv: 'y', api_key_tag: 'z' };
+    try {
+      const r = await resolverModeloDoPonto('sentiment_classify', ORG, 'anthropic/claude-haiku-4-5');
+      expect(r?.origem).toBe('binding');
+      expect(r?.modelId).toBe('openai/gpt-oss-120b');
+      expect(r?.model).toBeDefined();
+    } finally { vi.unstubAllEnvs(); }
+  });
   it('binding gratuito sem chave nao cai em pago', async () => {
     vi.stubEnv('AI_FREE_ONLY_ORGANIZATION_IDS', ORG);
     bindings.linha = { provider: 'openrouter', credential_id: 'missing', model_id: 'qwen/model:free', base_url: null };

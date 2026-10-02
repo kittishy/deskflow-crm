@@ -13,7 +13,7 @@ vi.mock("@/lib/env", () => ({
   },
 }));
 
-import { validateOpenRouterKey, validateProviderKey, validateTypeSafeKey } from "@/lib/ai/provider-validators";
+import { validateOpenCodeKey, validateOpenRouterKey, validateProviderKey, validateTypeSafeKey } from "@/lib/ai/provider-validators";
 
 /**
  * POR QUE ESTE ARQUIVO EXISTE
@@ -106,6 +106,39 @@ describe("validateOpenRouterKey", () => {
     );
     await validateOpenRouterKey("sk-or-v1-boa");
     expect(chamadas[0]).toContain("/api/v1/key");
+  });
+});
+
+describe("validateOpenCodeKey", () => {
+  it("consulta modelos permitidos e prova a chave com uma chamada curta gratuita", async () => {
+    vi.stubGlobal("fetch", fetchFalso({
+      "/models": { status: 200, body: { data: [{ id: "space-bunny-free" }] } },
+      "/chat/completions": { status: 401 },
+    }));
+    const r = await validateOpenCodeKey("credencial-teste-invalida");
+    expect(r).toEqual({ ok: false, error: "auth_failed_401" });
+    expect(chamadas).toEqual([
+      "https://opencode.ai/zen/v1/models",
+      "https://opencode.ai/zen/v1/chat/completions",
+    ]);
+  });
+
+  it("após a chamada fictícia lista somente modelos gratuitos sem treinamento", async () => {
+    vi.stubGlobal("fetch", fetchFalso({
+      "/chat/completions": { status: 200 },
+      "/models": { status: 200, body: { data: [
+        { id: "space-bunny-free" },
+        { id: "longcat-2.5-preview-free" },
+        { id: "muse-spark-1.3-contributor-free" },
+        { id: "gpt-5.6-sol" },
+      ] } },
+    }));
+    const r = await validateOpenCodeKey("credencial-teste-valida");
+    expect(r).toEqual({ ok: true, models: ["space-bunny-free", "longcat-2.5-preview-free"] });
+    expect(chamadas).toEqual([
+      "https://opencode.ai/zen/v1/models",
+      "https://opencode.ai/zen/v1/chat/completions",
+    ]);
   });
 });
 

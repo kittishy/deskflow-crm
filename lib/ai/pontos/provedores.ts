@@ -87,6 +87,16 @@ export const PROVEDORES = [
     prefixoDaChave: "sk-or-…",
   },
   {
+    id: "opencode",
+    rotulo: "OpenCode Zen (gratuito)",
+    quandoUsar:
+      "Provedor de contingência. O CRM só oferece Space Bunny e LongCat gratuitos, sem ferramentas do CRM; os modelos gratuitos podem sair do ar sem aviso.",
+    aceitaEndpointProprio: false,
+    catalogoSincronizavel: false,
+    ondePegarAChave: "https://opencode.ai/auth",
+    prefixoDaChave: "sk-…",
+  },
+  {
     id: "deepseek",
     rotulo: "DeepSeek",
     quandoUsar:
