@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => ({
   invalidate: vi.fn(),
 }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: mocks.post } }));
-vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({ invalidateQueries: mocks.invalidate }) }));
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: mocks.invalidate }),
+}));
 vi.mock("sonner", () => ({ toast: { error: mocks.toastError, success: mocks.toastSuccess } }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (message: string) => message }));
 vi.mock("./RunTrace", () => ({ RunTrace: () => null }));
@@ -31,15 +33,60 @@ describe("TestPanel error visibility", () => {
     render(
       <TestPanel
         agent={{ id: "agent-1" } as AgentRow}
-        draft={{ id: "version-1", status: "draft", version_number: 2, provider: "openrouter", model: "free" } as unknown as AgentVersionRow}
+        draft={
+          {
+            id: "version-1",
+            status: "draft",
+            version_number: 2,
+            provider: "openrouter",
+            model: "free",
+          } as unknown as AgentVersionRow
+        }
         published={null}
       />,
     );
-    fireEvent.change(screen.getByLabelText(/Mensagem do cliente/), { target: { value: "Quanto custa?" } });
+    fireEvent.change(screen.getByLabelText(/Mensagem do cliente/), {
+      target: { value: "Quanto custa?" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Executar teste" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("O provedor não respondeu.");
     expect(screen.queryByText("Nenhum teste executado ainda.")).toBeNull();
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith("O provedor não respondeu."));
+  });
+
+  it("waits for the server's long-running dry-run and explains a lost response", async () => {
+    mocks.post.mockRejectedValueOnce(
+      new DOMException("The operation was aborted.", "TimeoutError"),
+    );
+    render(
+      <TestPanel
+        agent={{ id: "agent-1" } as AgentRow}
+        draft={
+          {
+            id: "version-1",
+            status: "draft",
+            version_number: 2,
+            provider: "openrouter",
+            model: "free",
+          } as unknown as AgentVersionRow
+        }
+        published={null}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/Mensagem do cliente/), {
+      target: { value: "Quanto custa?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Executar teste" }));
+
+    await waitFor(() =>
+      expect(mocks.post).toHaveBeenCalledWith(expect.any(String), expect.any(Object), {
+        timeoutMs: 270_000,
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "A resposta demorou mais que o limite da tela",
+    );
+    expect(mocks.invalidate).toHaveBeenCalledWith({ queryKey: expect.any(Array) });
   });
 });
