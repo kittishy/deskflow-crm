@@ -39,6 +39,24 @@ const atkinson = localFont({
   variable: "--font-atkinson",
 });
 
+// Inter — corpo de texto, alinhada ao portfólio da marca.
+const inter = localFont({
+  src: [
+    { path: "./fonts/inter-200-800-latin.woff2", weight: "200 800", style: "normal" },
+  ],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+// Space Grotesk — display/títulos, alinhada ao portfólio da marca.
+const spaceGrotesk = localFont({
+  src: [
+    { path: "./fonts/space-grotesk-300-700-latin.woff2", weight: "300 700", style: "normal" },
+  ],
+  display: "swap",
+  variable: "--font-space-grotesk",
+});
+
 const plexMono = localFont({
   src: [
     { path: "./fonts/ibm-plex-mono-400-latin-latin-ext.woff2", weight: "400", style: "normal" },
@@ -282,7 +300,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       lang="pt-BR"
       data-theme="light"
       suppressHydrationWarning
-      className={`${atkinson.variable} ${plexMono.variable}`}
+      className={`${atkinson.variable} ${plexMono.variable} ${inter.variable} ${spaceGrotesk.variable}`}
     >
       <head>
         {/* Primeiro de tudo: a cor da instalação, antes do CSS e do script de tema. */}
