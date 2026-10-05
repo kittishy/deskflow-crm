@@ -70,7 +70,7 @@ function SlaTimelineInline({ received_at, due_at, request_type }: SlaTimelinePro
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
-            className={`h-full rounded-full transition-all ${progressColor}`}
+            className={`h-full rounded-full transition-[width] ${progressColor}`}
             style={{ width: `${progressPct}%` }}
             role="progressbar"
             aria-valuenow={progressPct}
