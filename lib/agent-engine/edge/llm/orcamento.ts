@@ -144,7 +144,26 @@ export type RazaoDeSeguir =
   /** Teto abaixo de `PISO_DE_TETO_CENTS`: baixo demais para ser honrado. */
   | 'teto_abaixo_do_piso'
   /** Gasto ainda abaixo do limiar de alarme. O caminho normal. */
-  | 'abaixo_do_limiar';
+  | 'abaixo_do_limiar'
+  /**
+   * A chave é da ORGANIZAÇÃO (BYOK), ou a origem não é a chave da instalação:
+   * quem paga a conta ao provedor é a própria empresa, e a carteira da
+   * plataforma não entra no meio.
+   */
+  | 'chave_da_organizacao'
+  /**
+   * A carteira é devida (`origemDaChave = 'chave_da_instalacao'`) mas o saldo
+   * não pôde ser lido. Segue, e o log leva a causa — é o caso do clone cujo
+   * `update.sh` não aplicou a migration.
+   */
+  | 'saldo_indisponivel';
+
+/**
+ * De quem é a chave que vai chamar o provedor. Declaração ÚNICA: o outro lugar
+ * que precisa dela (`credentials.ts`) reexporta este tipo em vez de repetir a
+ * união — duas uniões parecidas divergem na primeira origem nova.
+ */
+export type OrigemDaChave = 'credencial_da_organizacao' | 'chave_da_instalacao';
 
 export interface EntradaDeOrcamento {
   /** `ai_budgets.enforcement_mode`. Linha ausente ⇒ o chamador resolve `'off'`. */
@@ -162,6 +181,30 @@ export interface EntradaDeOrcamento {
   /** `AI_BUDGET_ENFORCEMENT` normalizado por `normalizarChaveDeOrcamento`. */
   chave: ChaveDeOrcamento;
   /**
+   * De QUEM é a chave que vai chamar o provedor. É o que separa BYOK de chave da
+   * instalação, e o que decide se há carteira envolvida.
+   *
+   * ⚠️ `undefined` significa "este chamador não fala de carteira" — e aí a
+   * carteira NÃO é avaliada, nem a favor nem contra. A alternativa (tratar
+   * ausente como BYOK e sair antes do resto) desligaria o teto de gasto de toda
+   * organização que não foi migrada para o novo chamador, sem um único erro: o
+   * `modo === 'off'` viraria inalcançável. Ausente é "fora do assunto", e só o
+   * valor explícito `chave_da_instalacao` liga a carteira.
+   *
+   * Declarado aqui, e não importado de `./credentials.ts`, porque este arquivo
+   * é puro e não pode arrastar `pg` nem o decifrador de credencial para o
+   * bundle. `credentials.ts` reexporta este tipo, e não o redefine.
+   */
+  origemDaChave?: OrigemDaChave;
+  /**
+   * Saldo da carteira em centavos de REAL, ou `null`/ausente quando não deu
+   * para ler (clone sem a migration, banco fora). `null` NUNCA bloqueia: é
+   * "não sei", e a resposta de quem não sabe é deixar passar e GRITAR no log —
+   * o dinheiro que se perde é de centavos e o WhatsApp que se perde é do
+   * cliente. Confundir `null` com `0` calaria a IA de todo clone desatualizado.
+   */
+  saldoReaisCents?: number | null;
+  /**
    * `ai_budgets.alarm_threshold_pct` — percentual do teto em que o aviso abre.
    * O banco restringe a 50..99 (`ai_budgets_alarm_threshold_pct_check`).
    */
@@ -177,10 +220,25 @@ export interface EntradaDeOrcamento {
 export type Veredito =
   | { acao: 'seguir'; porque: RazaoDeSeguir }
   | { acao: 'avisar_e_seguir'; porque: 'primeiro_cruzamento' | 'limiar' }
-  | { acao: 'bloquear'; porque: 'teto_atingido' };
+  | { acao: 'bloquear'; porque: 'teto_atingido' | 'sem_saldo' };
 
 function ehPurposeIsento(purpose: string): boolean {
   return (PURPOSES_ISENTOS as readonly string[]).includes(purpose);
+}
+
+/**
+ * A carteira entra na decisão só quando o chamador DISSE que a chave é da
+ * instalação. `undefined` = "este chamador não fala de carteira" e a carteira
+ * não é avaliada — ver o campo, que explica por que tratar o ausente como
+ * BYOK desligaria o teto de gasto inteiro.
+ */
+function aCarteiraEntraNaDecisao(origemDaChave: OrigemDaChave | undefined): boolean {
+  return origemDaChave === 'chave_da_instalacao';
+}
+
+/** `true` só para um número finuto: `null`, `undefined` e `NaN` são "não sei". */
+function saldoFoiLido(saldo: number | null | undefined): saldo is number {
+  return typeof saldo === 'number' && Number.isFinite(saldo);
 }
 
 /**
@@ -209,24 +267,65 @@ function ehPurposeIsento(purpose: string): boolean {
  * orçamento de propósito levando o corte mais duro — morre aqui por construção.
  */
 export function decidirOrcamento(entrada: EntradaDeOrcamento): Veredito {
-  // (1) Retorno mais cedo de todos. Para 100% das organizações no dia 1 o modo é
+  // ───────────────────────────────────────────────────────────────────────────
+  // A CARTEIRA — dinheiro já pago, e por isso SEM escada de avisos.
+  //
+  // Ela vem ANTES do `modo === 'off'` do teto, e essa ordem não é estilo: o
+  // `enforcement_mode` nasce `'off'` por DEFAULT, ou seja, para 100% das
+  // organizações. Um degrau de carteira depois do `modo === 'off'` nunca
+  //-executaria — o recurso nasceria morto e ninguém perceberia.
+  //
+  // ⚠️ A ordem dentro do bloco é a assimetria deste arquivo, escrita:
+  //
+  //   (0)  chave de emergência do operador — vence TUDO, inclusive saldo zerado.
+  //        `AI_BUDGET_ENFORCEMENT=off` é a válvula documentada ("IA volta — sem
+  //        psql, sem saber SQL"). Se a carteira passer por cima dela, quem opera
+  //        a VPS fica sem volta nenhuma quando o saldo zera.
+  //   (0b) BYOK — a carteira não entra. O dinheiro é da organização e a conta é
+  //        dela; debitar aqui seria cobrar duas vezes pelo mesmo token.
+  //   (0c) isentos — `connection_test` é a ÚNICA lanterna de quem está no
+  //        escuro, e guardrail que é desligado por orçamento é proteção desligada.
+  //   (0d) saldo ilegível — segue, com a causa no log. Ver `saldoFoiLido`.
+  //   (0e) saldo ≤ 0 — BLOQUEIA. Sem aviso prévio, porque não existe "aviso de
+  //        saldo zerado": no instante do aviso a IA já está morta. A recuperação
+  //        é recarregar, que é immediata e visível.
+  //
+  // Daqui para baixo é o TETO DE GASTO, intacto como estava.
+  // ───────────────────────────────────────────────────────────────────────────
+  if (entrada.chave === 'off') {
+    return { acao: 'seguir', porque: 'chave_de_emergencia' };
+  }
+
+  if (aCarteiraEntraNaDecisao(entrada.origemDaChave)) {
+    if (ehPurposeIsento(entrada.purpose)) {
+      return { acao: 'seguir', porque: 'purpose_isento' };
+    }
+    if (!saldoFoiLido(entrada.saldoReaisCents)) {
+      return { acao: 'seguir', porque: 'saldo_indisponivel' };
+    }
+    if (entrada.saldoReaisCents <= 0) {
+      return { acao: 'bloquear', porque: 'sem_saldo' };
+    }
+  }
+
+  // (2) `AI_BUDGET_ENFORCEMENT=off` já foi resolvido no degrau (0) da carteira:
+  // o kill switch é absoluto e não se decide duas vezes.
+
+  // (3) Retorno mais cedo de todos. Para 100% das organizações no dia 1 o modo é
   // 'off', e o chamador nem chega a consultar o gasto: menos trabalho que hoje.
   if (entrada.modo === 'off') {
     return { acao: 'seguir', porque: 'modo_desligado' };
   }
 
-  // (2) Kill switch do operador da VPS às 2h da manhã: põe `off`, reinicia, a IA
-  // volta — sem psql, sem saber SQL.
-  if (entrada.chave === 'off') {
-    return { acao: 'seguir', porque: 'chave_de_emergencia' };
-  }
-
-  // (3) Diagnóstico e guardrail nunca são recusados por gasto.
+  // (4) Diagnóstico e guardrail nunca são recusados por gasto — e isto NÃO é
+  // repetição do isento de (0c): aquele só existe quando a carteira entra na
+  // decisão. Este protege o TETO para quem não tem carteira, e sem ele uma
+  // organização com teto ligado passaria a barrar o próprio diagnóstico.
   if (ehPurposeIsento(entrada.purpose)) {
     return { acao: 'seguir', porque: 'purpose_isento' };
   }
 
-  // (4) e (5) — teto sem valor útil não vincula ninguém.
+  // (5) e (6) — teto sem valor útil não vincula ninguém.
   if (entrada.tetoCents <= 0) {
     return { acao: 'seguir', porque: 'sem_teto' };
   }
@@ -256,13 +355,13 @@ export function decidirOrcamento(entrada: EntradaDeOrcamento): Veredito {
     return { acao: 'avisar_e_seguir', porque: 'limiar' };
   }
 
-  // (6) Carência. `null` nasce da coluna nova e nunca vence — `null <= now()` é
+  // (7) Carência. `null` nasce da coluna nova e nunca vence — `null <= now()` é
   // `null` no banco, e aqui é uma recusa explícita, não um `undefined` de sorte.
   if (entrada.efetivoEm === null || entrada.agora.getTime() < entrada.efetivoEm.getTime()) {
     return { acao: 'avisar_e_seguir', porque: 'limiar' };
   }
 
-  // (7) Ninguém é bloqueado sem ter sido avisado.
+  // (8) Ninguém é bloqueado sem ter sido avisado.
   if (!entrada.avisadoNesteMes) {
     return { acao: 'avisar_e_seguir', porque: 'primeiro_cruzamento' };
   }

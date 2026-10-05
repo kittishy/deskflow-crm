@@ -40,12 +40,22 @@ export interface ChannelSendInput {
     /** Valor por slot, chaveado por `slotKey` — a mesma chave da tela. */
     values: Record<string, string>;
   };  /**
-   * Presente = este envio é uma IMAGEM já guardada no Storage da conversa, e o
-   * `body` é a legenda (pode ser vazio). Hoje só a foto do catálogo usa
-   * (`agent/fotos-do-produto.ts`). Caminho, nunca URL nem bytes: quem assina a
-   * URL curta para o canal é o handler de mensagens, como em toda mídia.
+   * Presente = este envio é uma MÍDIA já guardada no Storage da conversa, e o
+   * `body` é a legenda (pode ser vazio). Caminho, nunca URL nem bytes: quem
+   * assina a URL curta para o canal é o handler de mensagens, como em toda mídia.
+   *
+   * `kind` diz o que o arquivo É, e ele decide o endpoint do canal: a foto do
+   * catálogo usa (`agent/fotos-do-produto.ts`) e o áudio da fala do agente
+   * (`agent/audio-do-turno.ts`). O que o canal faz com cada um já é do
+   * adaptador — o WAHA manda áudio como `sendVoice` com `convert: true`, porque
+   * o WhatsApp só aceita OGG/OPUS (`lib/waha/media-send.ts`).
+   *
+   * OPCIONAL, e `image` é o padrão, por compatibilidade: o contrato já estava
+   * publicado com `{ storagePath, mime }` e trocar isso agora quebraria todo
+   * chamador de foto. Quem manda áudio declara `kind: 'audio'` — e o texto
+   * continua sendo texto, porque `kind` ausente nunca vira áudio por dedução.
    */
-  media?: { storagePath: string; mime: string };
+  media?: { kind?: 'image' | 'audio'; storagePath: string; mime: string };
 }
 
 /**

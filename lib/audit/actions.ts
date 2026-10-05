@@ -999,6 +999,12 @@ export const AUDIT_ACTIONS = [
   "company_people.updated",
   "contacts.person_linked",
   "imports.companies_people",
+  // Pesquisa de satisfação (migration 0507). O disparo sai pelo cron `nps-dispatch`
+  // e a resposta pela rota pública `/api/v1/nps/[token]` — por isso DOIS códigos:
+  // "convidado" e "respondeu" são dois fatos de dois atores (o servidor e o
+  // cliente), e um código só contaria metade.
+  "nps.pesquisa_dispensada",
+  "nps.pesquisa_respondida",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

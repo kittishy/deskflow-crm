@@ -25,6 +25,7 @@ import {
   normalizarModoDeOrcamento,
   type ChaveDeOrcamento,
   type ModoDeOrcamento,
+  type OrigemDaChave,
 } from './orcamento';
 import type { RaciocinioDeepseek } from './providers';
 import type { CacheTtl } from './stable-prefix';
@@ -156,8 +157,17 @@ export interface OrcamentoDaOrg {
 /**
  * De QUEM é a chave que o resolvedor devolveu. Mesmo vocabulário de
  * `lib/ai/embeddings/chave.ts`, que responde a mesma pergunta para embedding.
+ *
+ * ⚠️ ALIAS, não união nova: a declaração mora em `./orcamento.ts` porque é lá que
+ * a decisão "esta chamada consome carteira?" é tomada, e duas uniões parecidas
+ * divergem na primeira origem que uma delas esquecer. O tipo continua exportado
+ * com o nome antigo — quem importa daqui não muda nada.
+ *
+ * O campo é o que permite ao gate de orçamento dizer "BYOK não debita" com
+ * certeza, em vez de comparar o plaintext com as chaves do `.env` — que era o
+ * jeito antigo e o que cada caminho fazia por conta própria.
  */
-export type OrigemDaChaveLlm = 'credencial_da_organizacao' | 'chave_da_instalacao';
+export type OrigemDaChaveLlm = OrigemDaChave;
 
 export interface OrgLlmConfig {
   provider: string;

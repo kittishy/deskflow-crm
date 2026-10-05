@@ -63,14 +63,23 @@ export interface SendMessageInput {
    * colidirem no ledger e o segundo virar `already_sent` sem ter saído.
    */
   template?: { name: string; language: string; values: Record<string, string> };
-  /** Presente = imagem da pasta da conversa em `whatsapp-media`; `body` é a legenda. */
-  media?: { storagePath: string; mime: string };
+  /**
+   * Presente = mídia da pasta da conversa em `whatsapp-media`; `body` é a
+   * legenda. `kind` diz o que o arquivo é (a foto do catálogo, o áudio da fala do
+   * agente) e é ele que vira o `type` do handler — ausente = imagem, que é o que
+   * este campo sempre quis dizer.
+   */
+  media?: { kind?: 'image' | 'audio'; storagePath: string; mime: string };
 }
 
 /**
- * O corpo que o handler de mensagens recebe: texto, template ou imagem da
+ * O corpo que o handler de mensagens recebe: texto, template ou mídia da
  * conversa. Exportado para o teste — o tipo decide o caminho no handler, e um
- * `type` errado manda a foto como texto sem ninguém ver.
+ * `type` errado manda o áudio como foto sem ninguém ver.
+ *
+ * `media.kind` é o `type`: `audio` vai por `sendVoice` (com `convert: true` do
+ * WAHA, que é quem embrulha em OGG/OPUS), `image` por `sendImage`. Ausente é
+ * imagem — o contrato publicado antes do áudio não tinha `kind`.
  */
 export function corpoDoEnvio(
   input: SendMessageInput,
@@ -87,12 +96,13 @@ export function corpoDoEnvio(
         }
       : input.media
         ? {
-            type: 'image' as const,
+            type: (input.media.kind ?? 'image') as 'image' | 'audio',
             media_storage_path: input.media.storagePath,
             media_mime: input.media.mime,
           }
         : { type: 'text' as const }),
-    // Foto sem legenda vai sem `body`: o schema do envio pede corpo não vazio.
+    // Mídia sem legenda vai sem `body`: o schema do envio pede corpo não vazio.
+    // Vale para a foto e para o áudio (a nota de voz não tem legenda nenhuma).
     ...(input.body !== '' || !input.media ? { body: input.body } : {}),
     metadata: { idempotency_key: idempotencyKey },
   };

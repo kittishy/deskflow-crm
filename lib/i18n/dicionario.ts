@@ -8914,6 +8914,23 @@ export const DICIONARIO: Traducoes = {
   "Sem motivo registrado": { es: "Sin motivo registrado" },
   "Etapa desconhecida": { es: "Etapa desconocida" },
   "sem moeda": { es: "sin moneda" },
+  // ─── PAINEL PÚBLICO COMPARTILHÁVEL (app/painel-publico/[id]) ───────────────
+  // Tela SEM sessão: quem chega pelo link é o cliente, o parceiro. As frases
+  // longas são as duas do estado "indisponível" — deliberadamente neutras, sem
+  // marca e sem repetir o id pedido. Os fragmentos com número ao redor
+  // (`… dos últimos` / `pérdidas en el …`) continuam fragmentos: o NÚMERO nunca
+  // passa por tradução, então o verbo fica onde a tela espera.
+  "Painel indisponível": { es: "Panel no disponible" },
+  "Este painel não existe, foi desligado ou ainda não está pronto. Peça um link novo a quem acompanha o atendimento.": { es: "Este panel no existe, se ha desactivado o todavía no está listo. Pide un enlace nuevo a quien sigue la atención." },
+  "Números agregados dos últimos": { es: "Cifras agregadas de los últimos" },
+  "Resumo do período": { es: "Resumen del período" },
+  "Negócios perdidos": { es: "Negocios perdidos" },
+  "negócios encerrados": { es: "negocios cerrados" },
+  "Este painel ainda não tem medições de atendimento no período.": { es: "Este panel todavía no tiene mediciones de atención en el período." },
+  "Onde os negócios foram perdidos": { es: "Dónde se perdieron los negocios" },
+  "Nenhuma perda registrada no período.": { es: "Ninguna pérdida registrada en el período." },
+  "perdas no período.": { es: "pérdidas en el período." },
+  "Exibindo as maiores.": { es: "Mostrando las mayores." },
   "Atrito, seu funil e sua performance nos últimos 30 dias.": { es: "Fricción, tu embudo y tu rendimiento en los últimos 30 días." },
   "Nenhuma demanda em risco": { es: "Ningún caso en riesgo" },
   "Toda demanda aberta teve atividade recente ou já tem um retorno agendado.": { es: "Todos los casos abiertos tuvieron actividad reciente o ya tienen un seguimiento programado." },

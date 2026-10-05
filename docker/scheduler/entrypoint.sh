@@ -111,6 +111,12 @@ CRONS="
 # repetição enquanto a âncora não mudar. Minuto 37, e não o 23 da data do funil:
 # as duas varrem crm_leads e não devem disputar a mesma batida num self-host pequeno.
 37 * * * *|60|api/v1/cron/lead-time-triggers
+# O NPS. De hora em hora: a pergunta sai depois de um atendimento encerrado e o
+# cooldown é de 90 dias por contato, então uma varredura de 5 em 5 minutos só
+# gastaria consulta para achar a mesma linha nada. Minuto 41 — livre, e fora do
+# 37 dos gatilhos por tempo e do 23/17 dos watchers de hora: num self-host pequeno
+# as varreduras de hora em hora não disputam a mesma batida.
+41 * * * *|60|api/v1/cron/nps-dispatch
 # O canal mudo (doc 11, decisão B): varredura de banco, sem rede, com régua em
 # DIAS. Diária e de madrugada porque o estado que ela lê muda em dias — de 5 em
 # 5 minutos seriam 288 varreduras para nada, e o aviso chegaria na mesma hora.

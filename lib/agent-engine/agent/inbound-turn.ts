@@ -37,7 +37,7 @@ import { currentExecutionBoundary, guardServiceEffect } from '@/lib/atendimento/
 import type pg from 'pg';
 import { z } from 'zod';
 import { auxModelArgs, type AuxModelArgs } from './aux-model-args';
-import type { ChannelAdapter, ChannelSendResult } from '../channel-adapter';
+import type { ChannelAdapter, ChannelSendInput, ChannelSendResult } from '../channel-adapter';
 
 import { withFields, type Logger } from '../obs/logger';
 import {
@@ -77,6 +77,12 @@ import {
   prepararFotosDoProduto,
   type FotoParaEnvio,
 } from './fotos-do-produto';
+import {
+  prepararAudioDoTurno,
+  type AudioDoTurnoDeps,
+  type AudioPreparado,
+  type MeioDoCliente,
+} from './audio-do-turno';
 import { enqueueJob, rescheduleJob, type JobRow, type Queryable } from '../queue/queue';
 import {
   applyLeadStateUpdate,
@@ -1230,6 +1236,16 @@ export interface InboundTurnDeps {
    * organização e o egress com allowlist (`lib/ai/decisao/ponto.ts`).
    */
   jev?: DependenciasDoPonto;
+  /**
+   * Resposta em ÁUDIO (`agent/audio-do-turno.ts`) — o gancho precisa da chave de
+   * voz da instalação, do provedor de síntese e do upload no bucket da conversa.
+   *
+   * OPCIONAL, e ausente = o turno responde em TEXTO, que é o de sempre. A
+   * ausência não é "temporariamente sem voz": é uma instalação (ou um teste) que
+   * não tem TTS, e degradar para texto é o comportamento correto — um cliente que
+   * recebeu áudio quando queria ler é pior do que um que recebeu texto.
+   */
+  audio?: AudioDoTurnoDeps;
 }
 
 /** Checkpoint mais recente do lead — a memória que atravessa sessões. */
@@ -1379,6 +1395,34 @@ export function inboundsNaoRespondidos(messages: readonly LeadContextMessage[]):
     if (m.body.trim() !== '') pendentes.unshift(m.body);
   }
   return pendentes;
+}
+
+/**
+ * O MEIO da última mensagem do cliente — a chave da reciprocidade do áudio
+ * (`agent/audio-do-turno.ts`): quem mandou áudio recebe áudio, quem digitou
+ * recebe texto.
+ *
+ * `type` só existe na linha que tem MÍDIA (`edge/crm/get-lead-context.ts`
+ * preenche os três campos juntos), então texto é o `else` e não um palpite. E
+ * conversa sem inbound nenhuma devolve `null`, que o gancho trata como RECUSA:
+ * ausência de informação não é autorização para trocar o meio da resposta — é o
+ * mesmo princípio de `followup-turn.ts` ("vai só o que o cliente digitou"),
+ * aplicado ao nosso lado da conversa.
+ *
+ * Considera a inbound mais recente que o turno LEU (`openingContext`), não a
+ * última linha do histórico: um compaction que trocasse a fonte aqui trocaria o
+ * meio da resposta do cliente, e reciprocity não é um detalhe que se degrada
+ * junto com o resumo.
+ */
+export function meioDaUltimaInbound(
+  messages: readonly LeadContextMessage[],
+): MeioDoCliente {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m === undefined || m.direction !== 'inbound') continue;
+    return m.type === 'audio' ? 'audio' : 'texto';
+  }
+  return null;
 }
 
 /**
@@ -2335,6 +2379,10 @@ async function executarTurnoDoAgente(
   //    drain coalesce no job da primeira.
   const mensagemDoJob =
     currentInboundText ?? latestInboundSignal(openingContext.context.messages);
+  // O MEIO com que o cliente chamou — lido uma vez, do contexto de abertura, e
+  // usado só quando o `send_message` for preparar áudio. `null` (sem inbound no
+  // histórico) NÃO libera áudio: ver `meioDaUltimaInbound`.
+  const meioDoClienteDaConversa = meioDaUltimaInbound(openingContext.context.messages);
   const inboundsPendentes = inboundsNaoRespondidos(openingContext.context.messages);
   if (
     !preview &&
@@ -3070,6 +3118,42 @@ async function executarTurnoDoAgente(
           fotosDoProduto = preparadas.fotos;
           fotosQueFaltaram = preparadas.tinha - preparadas.fotos.length;
         }
+        // A resposta em ÁUDIO (reciprocidade, `agent/audio-do-turno.ts`): preparado
+        // ANTES da cadeia e fora do lock do número — síntese e upload são rede, e
+        // esperar por eles com o lock na mão segura a fila do NÚMERO (o mesmo
+        // motivo do #654 na pausa humana). Toda recusa degrada para texto sem
+        // erro: sem chave, sem voz, provedor escolhido que o produto não
+        // conhece, ou cliente que digitou.
+        //
+        // FOTO TEM PRECEDÊNCIA: com foto pra mandar, o áudio seria síntese que
+        // ninguém ouve — e a foto, que o cliente pediu ao ver o produto, é a
+        // resposta mais informativa. Não se paga TTS para deitar fora.
+        //
+        // E o texto aqui é o PRÉ-CADEIA, que é por onde o `send` decide: o
+        // `finalBody` pode ter recebido o disclosure injetado pelo gate F4-05, e
+        // nesse caso a nota de voz — sintetizada do corpo antigo — seria uma frase
+        // diferente da que os gates aprovaram. Divergiu, o texto sai (mesma coisa
+        // que burlar o gate). Fora disso o áudio SAI NO LUGAR do texto: mandar os
+        // dois é repetir a mesma frase em dois meios, que é como se queima um
+        // contato no WhatsApp. O corpo do envio vai vazio de propósito — a nota de
+        // voz não tem legenda, e `corpoDoEnvio` (`edge/crm/send-message.ts`) omite
+        // `body` quando há mídia e o corpo é vazio.
+        let audioDoTurno: AudioPreparado = { ok: false, motivo: 'sem_agente' };
+        if (!preview && deps.audio !== undefined && fotosDoProduto.length === 0) {
+          audioDoTurno = await prepararAudioDoTurno(pool, deps.audio, {
+            tenantId,
+            conversationId: input.conversationId,
+            agentId: agentConfig?.agentId ?? null,
+            texto: body,
+            meioDoCliente: meioDoClienteDaConversa,
+          });
+          if (audioDoTurno.ok) {
+            runLog.info('resposta preparada em áudio', {
+              job_id: liveJob().id,
+              conversation_id: input.conversationId,
+            });
+          }
+        }
         // F4-04: sinaliza (independente do gate F4-01/F4-08) se ESTA candidata é uma
         // promessa fora de tabela — usado só para correlacionar com o jailbreak no fim do
         // turno. A detecção é determinística (decidePromise); sem tabela do tenant = no-op.
@@ -3217,7 +3301,9 @@ async function executarTurnoDoAgente(
                 Math.floor(Math.random() * (pacingDoTurno?.knobs.jitterMaxMs ?? 800));
               const enviar = (
                 corpo: string,
-                media?: FotoParaEnvio,
+                // `ChannelSendInput['media']`, não `FotoParaEnvio`: o `kind` (foto x
+                // áudio) mora no contrato do adapter. Ausente = imagem.
+                media?: ChannelSendInput['media'],
               ): Promise<ChannelSendResult> => {
                 seq += 1;
                 return liveChannel().send({
@@ -3232,6 +3318,8 @@ async function executarTurnoDoAgente(
                   ...(media ? { media } : {}),
                 });
               };
+              // Áudio no lugar do texto (o porquê da recusa está na preparação, acima): corpo reescrito pela cadeia = texto manda.
+              if (audioDoTurno.ok && finalBody === body) return enviar('', audioDoTurno.media);
               // Cada foto é uma mensagem física: só vão as que cabem no que resta do teto
               // do turno (a checagem de `max_sends_per_turn` acima roda uma vez, antes).
               // O resto é medido ANTES DE CADA FOTO, depois do texto: o texto acima do

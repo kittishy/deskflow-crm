@@ -842,6 +842,17 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "link do pino no mapa que `lib/prospecting/fontes/osm.ts` monta para cada empresa encontrada na fonte gratuita: é o que o operador toca para ver o lugar. O dado vem do Overpass; trocar pelo domínio do revendedor não abriria mapa nenhum.",
   },
+  // ── voz do agente (TTS): o destino da síntese, com a chave da instalação ──
+  "api.fish.audio": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "endpoint da síntese de voz da Fish Audio (`lib/audio/provedores/fish.ts`), para o agente responder em áudio quando o cliente mandou áudio. É o destino do request, com a chave da PRÓPRIA organização (`TTS_API_KEY`) — trocar pelo domínio do revendedor faria a chamada não chegar a lugar nenhum. Vale registrar que a allowlist de egress deriva DESTA base (`baseEmUso()` em `lib/audio/sintese.ts`), então esconder o nome aqui quebraria também a contenção de saída. Sem a chave, o agente responde em texto: nenhum dado de cliente sai.",
+  },
+  "api.elevenlabs.io": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "endpoint da síntese de voz da ElevenLabs (`lib/audio/provedores/elevenlabs.ts`), o segundo provedor de voz para a organização que já tem chave dele. Mesmo papel do Fish Audio acima: destino do request, chave da PRÓPRIA organização, e a base de onde a allowlist de egress deriva. Trocar pelo domínio do revendedor faria a chamada não chegar a lugar nenhum.",
+  },
   // ── provedor de IA das verificações auxiliares (mineração de leads) ──
   "api.groq.com": {
     categoria: "FORNECEDOR",

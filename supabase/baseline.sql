@@ -44327,6 +44327,196 @@ create trigger trg_fechar_aviso_do_jev_ao_bloquear
  execute function public.fn_fechar_aviso_do_jev_ao_bloquear();
 
 notify pgrst, 'reload schema';
+-- ---- preferências de voz do agente: TTS opt-in por agente (migration 0506) ----
+-- ============================================================================
+-- 0506: PREFERÊNCIAS DE VOZ DO AGENTE
+--
+-- A resposta em áudio (TTS) é opt-in por agente: `tts_enabled` liga, e o
+-- provedor/voz dizem COM QUE voz. Sem esta linha o agente responde em TEXTO —
+-- que é o comportamento de sempre e o que toda instalação existente já tem.
+--
+-- Por que coluna, e não jsonb: o resto dos limites do atendimento vive em
+-- colunas tipadas (`max_steps`, `token_budget`, `history_message_window`,
+-- `inbound_debounce_ms` da 0498), e o CHECK abaixo é a cerca que o TypeScript
+-- sozinho não garante — `tts_provider` é texto que vem da tela, e um valor fora
+-- da tabela tem de ser recusado pelo BANCO.
+--
+-- Onde o áudio resultante fica: `whatsapp-media/<org>/<conversa>/tts-<assinatura>.<ext>`
+-- — derivado da CONVERSA, que o possui, então a LGPD apaga junto (mesmo regime da
+-- foto do catálogo, 0390). O canal recebe o caminho, nunca bytes.
+--
+-- Idempotente: `add column if not exists` e `drop constraint if exists` antes do
+-- `add`. Sem backfill: NULL/false é o estado de sempre (texto), então nenhuma
+-- linha existente muda de comportamento.
+-- ============================================================================
+alter table public.ai_agents
+  add column if not exists tts_enabled boolean not null default false;
+
+alter table public.ai_agents
+  add column if not exists tts_provider text;
+
+alter table public.ai_agents
+  add column if not exists tts_voice_id text;
+
+comment on column public.ai_agents.tts_enabled is
+  'Resposta em áudio (TTS) ligado para ESTE agente. false/NULL = responde em texto, que é o comportamento de sempre; exige TTS_API_KEY na instalação.';
+
+comment on column public.ai_agents.tts_provider is
+  'Provedor de voz escolhido na tela: fish | elevenlabs. NULL = usa o que o gancho do turno resolver; valor fora da tabela é recusado pelo banco e o turno degrada para texto.';
+
+comment on column public.ai_agents.tts_voice_id is
+  'Voz escolhida na tela para este agente (id do modelo de voz no provedor). NULL = usa TTS_VOICE_ID da instalação; vazio nos dois lados significa "sem voz" e o turno responde em texto.';
+
+alter table public.ai_agents
+  drop constraint if exists ai_agents_tts_provider_check;
+
+alter table public.ai_agents
+  add constraint ai_agents_tts_provider_check
+  check (tts_provider is null or tts_provider in ('fish', 'elevenlabs'));
+
+-- ---- as respostas de satisfação (o NPS por atendimento) (migration 0507) ----
+-- ENTRA ANTES DO BLOCO DA VARREDURA anon: cria função (a `fn_nps_respostas`).
+--
+-- Uma linha por CONVERSA perguntada, com o convite (`asked_at`, `token`) e a
+-- resposta (`score`, `comment`, `answered_at`). Uma tabela e não uma coluna em
+-- `conversations` porque o agregado é por ORGANIZAÇÃO e por PERÍODO, e a leitura
+-- é o oposto da escrita.
+--
+-- ⚠️ A LINHA NASCE ANTES DA RESPOSTA: `asked_at` é `not null` e
+-- `score`/`answered_at` começam nulos. É a existência da linha que garante a
+-- unicidade (índice único abaixo) — uma tabela que só guarda quem respondeu
+-- devolveria o convite a cada rodada do cron.
+--
+-- ⚠️ `conversation_id` NÃO tem FK, e é deliberado: o NPS é medida de operação, e
+-- com `on delete cascade` a nota mudaria para baixo DEPOIS, sem ninguém ter
+-- recebido atendimento pior (mesma decisão de `jev_observacoes`, 0421).
+-- `contact_id` tem FK `on delete set null` e é ele que paga o cooldown de 90 dias.
+--
+-- A função devolve o agregado no SERVIDOR (a mesma conta de
+-- `lib/nps/agregado.ts`): agregar no Node traz a resposta inteira da
+-- organização pela rede para somar em JavaScript. `security invoker` — a RLS é a
+-- única decisão, e um `definer` leria a resposta de outra organização por
+-- `p_org` escrito à mão.
+create table if not exists public.nps_responses (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  conversation_id uuid not null,
+  contact_id uuid references public.contacts(id) on delete set null,
+  token uuid not null default gen_random_uuid(),
+  score smallint,
+  comment text,
+  asked_at timestamptz not null default now(),
+  answered_at timestamptz,
+  constraint nps_responses_score_check check (score is null or (score >= 0 and score <= 10)),
+  constraint nps_responses_comment_check check (comment is null or char_length(comment) <= 1000),
+  constraint nps_responses_resposta_check check ((score is null) = (answered_at is null))
+);
+
+comment on table public.nps_responses is
+  'Uma linha por CONVERSA perguntada: o convite (asked_at, token) e a resposta (score, comment, answered_at). Ponteiro de conversa SEM FK para a medida não sumir quando a conversa for apagada. Escrita só pelo servidor (cron nps-dispatch e a rota pública, via service role); lida por qualquer membro da organização (fn_nps_respostas).';
+
+create unique index if not exists nps_responses_uma_por_conversa_idx
+  on public.nps_responses (organization_id, conversation_id);
+
+create unique index if not exists nps_responses_token_idx
+  on public.nps_responses (token);
+
+create index if not exists nps_responses_org_perguntada_idx
+  on public.nps_responses (organization_id, asked_at desc);
+
+create index if not exists nps_responses_org_contato_idx
+  on public.nps_responses (organization_id, contact_id, asked_at desc)
+  where contact_id is not null;
+
+alter table public.nps_responses enable row level security;
+drop policy if exists tenant_isolation_nps_responses_select on public.nps_responses;
+create policy tenant_isolation_nps_responses_select on public.nps_responses
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.nps_responses from anon, authenticated;
+grant select on public.nps_responses to authenticated;
+grant all on public.nps_responses to service_role;
+
+create or replace function public.fn_nps_respostas(
+  p_org uuid,
+  p_desde timestamptz default null
+) returns jsonb
+language sql stable
+set search_path = public
+as $$
+  with janela as (
+    select n.score
+    from public.nps_responses n
+    where n.organization_id = p_org
+      and (p_desde is null or n.asked_at >= p_desde)
+  ),
+  contagens as (
+    select
+      count(*)::int as perguntadas,
+      count(*) filter (where w.score is not null)::int as respondidas,
+      count(*) filter (where w.score between 9 and 10)::int as promotores,
+      count(*) filter (where w.score between 7 and 8)::int as neutros,
+      count(*) filter (where w.score between 0 and 6)::int as detratores,
+      -- Fora de 0..10 nunca deveria existir (CHECK), e é por isso que a conta
+      -- aparece: um zero aqui é sinal de defeito, não de cliente.
+      count(*) filter (where w.score is not null and (w.score < 0 or w.score > 10))::int as descartadas,
+      max(w.answered_at) as ultima_resposta_em
+    from janela w
+  )
+  select jsonb_build_object(
+    'perguntadas', c.perguntadas,
+    'respondidas', c.respondidas,
+    'promotores', c.promotores,
+    'neutros', c.neutros,
+    'detratores', c.detratores,
+    'descartadas', c.descartadas,
+    'nps', case
+      when c.respondidas < 5 then null
+      else round(((c.promotores - c.detratores)::numeric / c.respondidas) * 100)
+    end,
+    'taxa_de_resposta', case
+      when c.perguntadas = 0 then 0
+      else round((c.respondidas::numeric / c.perguntadas) * 10000) / 100
+    end,
+    'ultima_resposta_em', c.ultima_resposta_em
+  )
+  from contagens c;
+$$;
+
+-- Função nova em `public` nasce EXPOSTA por DUAS origens: o `GRANT ALL ON
+-- FUNCTIONS TO anon` do corpo do arquivo e o grant a PUBLIC que o Postgres dá a
+-- toda função. Tratar só uma deixa a RPC alcançável pela anon key.
+revoke all on function public.fn_nps_respostas(uuid, timestamptz) from public;
+revoke execute on function public.fn_nps_respostas(uuid, timestamptz) from anon;
+grant execute on function public.fn_nps_respostas(uuid, timestamptz)
+  to authenticated, service_role;
+
+-- ---- painel público compartilhável (migration 0508) ----
+-- Um link sem login que mostra números agregados da organização. Mesma natureza
+-- de `ad_tracking_links` (0437): a credencial é o UUID da LINHA, e a organização
+-- do painel é a que está gravada nela. Service role bypassa RLS, então o filtro
+-- de `organization_id` mora na rota, não num garde do banco.
+--
+-- `window_days` é a JANELA em DIAS, não `from`/`to`: quem compartilha o link não
+-- escolhe o período. `enabled` é o opt-in da organização.
+create table if not exists public.public_panels (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  enabled boolean not null default true,
+  title text not null check (char_length(btrim(title)) between 1 and 120),
+  window_days integer not null default 30 check (window_days between 1 and 365),
+  created_at timestamptz not null default now()
+);
+alter table public.public_panels enable row level security;
+-- NENHUMA política: quem lê é o service role, dentro da aplicação. `revoke ...
+-- from public` também, porque o `ALTER DEFAULT PRIVILEGES` precede toda tabela de
+-- apêndice.
+revoke all on public.public_panels from public, anon, authenticated;
+grant select, insert, update, delete on public.public_panels to service_role;
+-- A listagem do dono é sempre por `organization_id`; o acesso público pelo UUID
+-- usa a chave primária e não precisa deste índice.
+create index if not exists public_panels_org_idx on public.public_panels(organization_id);
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

@@ -1981,6 +1981,9 @@ export type Database = {
           priority: number
           published_version_id: string | null
           system_prompt: string
+          tts_enabled: boolean
+          tts_provider: string | null
+          tts_voice_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2004,6 +2007,9 @@ export type Database = {
           priority?: number
           published_version_id?: string | null
           system_prompt: string
+          tts_enabled?: boolean
+          tts_provider?: string | null
+          tts_voice_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2027,6 +2033,9 @@ export type Database = {
           priority?: number
           published_version_id?: string | null
           system_prompt?: string
+          tts_enabled?: boolean
+          tts_provider?: string | null
+          tts_voice_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -9957,6 +9966,92 @@ export type Database = {
               "id"
             ]
           }
+        ]
+      }
+      nps_responses: {
+        Row: {
+          asked_at: string
+          answered_at: string | null
+          comment: string | null
+          contact_id: string | null
+          conversation_id: string
+          id: string
+          organization_id: string
+          score: number | null
+          token: string
+        }
+        Insert: {
+          asked_at?: string
+          answered_at?: string | null
+          comment?: string | null
+          contact_id?: string | null
+          conversation_id: string
+          id?: string
+          organization_id: string
+          score?: number | null
+          token?: string
+        }
+        Update: {
+          asked_at?: string
+          answered_at?: string | null
+          comment?: string | null
+          contact_id?: string | null
+          conversation_id?: string
+          id?: string
+          organization_id?: string
+          score?: number | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nps_responses_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nps_responses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_panels: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          organization_id: string
+          title: string
+          window_days: number
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          organization_id: string
+          title: string
+          window_days?: number
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          organization_id?: string
+          title?: string
+          window_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "public_panels_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }

@@ -254,6 +254,25 @@ const schema = z.object({
   // da OpenAI da organização — assim como `TRANSCRIPTION_MODEL`. Leitura
   // tolerante em `idiomasDaTranscricao` (grafia errada não derruba o worker).
   TRANSCRIPTION_LANGUAGES: z.string().optional().default(""),
+  // ─── Voz do agente (TTS) ───
+  //
+  // A chave do SERVIÇO DE SÍNTESE, do ponto de vista do agent-engine: sem ela a
+  // resposta vai em TEXTO, sempre, e nada quebra. Não é `required()` por um
+  // motivo que o resto deste arquivo já pagou duas vezes: `lib/env.ts` lança na
+  // IMPORTAÇÃO do módulo, que no Next é a primeira requisição, e o healthcheck
+  // do contêiner é probe TCP puro — exigir aqui transformaria "quero voz" em
+  // "derrubo o produto inteiro", com o Docker mostrando `healthy` e 100% das
+  // requisições em 500. `z.string()` cru, nunca `z.enum`: o mesmo motivo de
+  // `AI_BUDGET_ENFORCEMENT` e `APP_ACCENT_HEX`.
+  //
+  // BASE_URL/MODEL/VOICE_ID são o PISO, como as preferências por agente
+  // (`ai_agents.tts_*`, migration 0506) são o caminho normal: organização que
+  // escolheu na tela muda aqui sem tocar no `.env`, e quem não mexeu na tela
+  // ainda assim tem voz. Vazio = ausente, nunca um valor inventado.
+  TTS_API_KEY: z.string().optional().default(""),
+  TTS_BASE_URL: z.string().optional().default(""),
+  TTS_MODEL: z.string().optional().default(""),
+  TTS_VOICE_ID: z.string().optional().default(""),
   // Groq — provedor de chat gratuito para verificações auxiliares do agente de
   // mineração de leads. A chave é separada da de transcrição: esta vale para
   // `/chat/completions`, aquela para `/audio/transcriptions`. Vazio = ausente.

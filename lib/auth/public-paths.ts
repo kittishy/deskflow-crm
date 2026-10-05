@@ -42,6 +42,15 @@ export const PUBLIC_PATHS: RegExp[] = [
   // redirect pro WhatsApp. Âncorado num segmento só (`[^/]+$`): um sub-path
   // futuro sob `/google/` não nasce público de carona.
   /^\/api\/v1\/anuncios\/google\/[^/]+$/,
+  // Landing page de captura de clique do Meta Ads (paridade com o Google acima).
+  // Mesmo motivo: quem chega é o NAVEGADOR de quem clicou no anúncio, sem cookie.
+  /^\/api\/v1\/anuncios\/meta\/[^/]+$/,
+  // NPS público: o token uuid na URL é a credencial; a org vem da linha persistida.
+  /^\/api\/v1\/nps\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  // Painel público: o id uuid na URL é a credencial; a org vem da linha persistida.
+  /^\/api\/v1\/painel-publico\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  // Página do painel público (sem login): o proxy não pode redirecionar para /login.
+  /^\/painel-publico\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   // Heartbeat do agente do host (bearer INTERNAL_SECRET/INTERNAL_CRON_SECRET,
   // checado dentro da própria rota) — sem cookie de sessão, igual /cron/.
   /^\/api\/v1\/system\/agent$/,

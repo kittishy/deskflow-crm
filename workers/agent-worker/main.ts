@@ -75,6 +75,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type pg from "pg";
 
 import { createInboundTurnHandler } from "@/lib/agent-engine/agent/inbound-turn";
+import type { AudioDoTurnoDeps } from "@/lib/agent-engine/agent/audio-do-turno";
 import {
   createFollowupTurnHandler,
   type FollowupTurnDeps,
@@ -101,6 +102,8 @@ import { llmEdgeConfigFromEnv } from "@/lib/agent-engine/edge/llm/run-model-call
 import { loadEnv, type Env } from "@/lib/agent-engine/env";
 import { urlDoSupabaseNoServidor } from "@/lib/supabase/url-do-servidor";
 import { createLogger, type Logger } from "@/lib/agent-engine/obs/logger";
+import { gravarAudioNoStorage } from "@/lib/audio/guardar";
+import { sintetizarFala } from "@/lib/audio/sintese";
 import {
   evaluateCacheHitAlert,
   metricsSnapshot,
@@ -693,6 +696,23 @@ export async function main(): Promise<void> {
   const env = loadEnv();
   const log = createLogger();
   const handlers = new Map<JobKind, JobHandler>();
+  // A resposta em ÁUDIO (`lib/agent-engine/agent/audio-do-turno.ts`). As quatro
+  // chaves são as MESMAS de `lib/env.ts` e de `.env.example`, lidas direto do
+  // `process.env` porque o schema do worker (`lib/agent-engine/env.ts`) não as
+  // declara — e o Zod REMOVE do objeto o que o schema não declara, então declará-las
+  // lá é que as traria de volta. Vazio = o gancho recusa com `sem_credencial` e o
+  // turno responde em texto, que é o de sempre.
+  const audio: AudioDoTurnoDeps = {
+    env: {
+      TTS_API_KEY: process.env.TTS_API_KEY ?? "",
+      TTS_BASE_URL: process.env.TTS_BASE_URL ?? "",
+      TTS_MODEL: process.env.TTS_MODEL ?? "",
+      TTS_VOICE_ID: process.env.TTS_VOICE_ID ?? "",
+    },
+    sintetizar: sintetizarFala,
+    upload: gravarAudioNoStorage(log),
+    log,
+  };
   const turnDeps: FollowupTurnDeps = {
     crmCfg: crmEdgeConfigFromEnv({
       SUPABASE_URL: urlDoSupabaseNoServidor(env.SUPABASE_SERVER_URL, env.NEXT_PUBLIC_SUPABASE_URL),
@@ -701,6 +721,7 @@ export async function main(): Promise<void> {
     llmCfg: llmEdgeConfigFromEnv(env),
     knobs: turnKnobsFromEnv(env),
     log,
+    audio,
     // Onda 5 (Task 5.1): fecha o turno dirigido por fluxo de volta no enrollment —
     // o worker fala pg puro (nunca Supabase client), então usa o adapter pg de
     // lib/followup/turn-bridge.ts (equivalente ao createSupabaseAdminClient das
