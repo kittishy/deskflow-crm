@@ -64,14 +64,49 @@ describe("invariante 1 — nada é apagado", () => {
 });
 
 describe("invariante 2 — saldo é sempre derivado", () => {
+  /**
+   * Colunas de saldo FORA do módulo, cada uma com o motivo apurado. Estão aqui
+   * DECLARADAS em vez de ignoradas por regex: uma coluna nova continua
+   * reprovando (tem que entrar na lista com razão), e a lista não envelhece
+   * (o segundo caso cobra que a exceção ainda exista).
+   */
+  const SALDO_FORA_DO_MODULO: Array<{ tabela: string; coluna: string; motivo: string }> = [
+    {
+      tabela: "ai_credit_balances",
+      coluna: "balance_cents",
+      motivo:
+        "cache da carteira de IA (migration 0557), em OUTRO domínio que o da " +
+        "comanda. O par extrato+saldo é atômico por construção: cada linha do " +
+        "extrato é escrita na MESMA transação do saldo (`lib/ai/creditos/gate.ts` " +
+        "e `recarga.ts`), então não existe instante em que os dois discordam. " +
+        "Negativo de propósito é dívida visível, não divergência silenciosa.",
+    },
+  ];
+
   it("nenhuma tabela do módulo tem coluna de saldo", () => {
     const suspeitas = [
       ...bloco.matchAll(/^\s*(\w*balance\w*|\w*saldo\w*|points_total|total_points)\s/gim),
     ];
+    const inesperadas = suspeitas
+      .map((m) => m[1]!)
+      .filter((coluna) => !SALDO_FORA_DO_MODULO.some((e) => e.coluna === coluna));
     expect(
-      suspeitas.map((m) => m[1]),
+      inesperadas,
       "saldo gravado diverge dos lançamentos no primeiro estorno, sem dar sinal",
     ).toEqual([]);
+  });
+
+  it("as exceções declaradas continuam existindo (a lista não pode envelhecer)", () => {
+    for (const e of SALDO_FORA_DO_MODULO) {
+      expect(
+        bloco,
+        `exceção ${e.tabela}.${e.coluna} não existe mais — remova de SALDO_FORA_DO_MODULO`,
+      ).toMatch(
+        new RegExp(
+          `create table if not exists public\\.${e.tabela}[\\s\\S]{0,3000}\\b${e.coluna}\\b`,
+        ),
+      );
+    }
   });
 
   it("a fidelidade é ledger: pontos assinados, sem coluna de tipo", () => {

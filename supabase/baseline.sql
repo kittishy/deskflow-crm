@@ -44745,6 +44745,84 @@ create trigger trg_ai_credit_recharges_updated_at
   before update on public.ai_credit_recharges
   for each row execute function public.fn_set_updated_at();
 
+-- ---- chunks textuais para organizações free-only (migration 0560) ----
+-- Vetores existentes seguem intactos; NULL identifica apenas chunks de versões
+-- text-only, que são consultados pelo caminho Portuguese full-text do runtime.
+alter table public.ai_chunks
+  alter column embedding drop not null;
+
+comment on column public.ai_chunks.embedding is
+  'Vetor do chunk quando a versão usa busca vetorial; NULL para versões text-only (embedding_model=text-only), consultadas por full-text search.';
+
+-- ---- busca textual do acervo free-only (migration 0561) ----
+-- Usa o mesmo escopo tenant/source/version da busca vetorial. `similarity` aqui
+-- é rank lexical, não uma medida vetorial.
+create or replace function public.fn_buscar_trechos_textuais_das_fontes(
+  p_organization_id uuid,
+  p_source_ids uuid[],
+  p_query text,
+  p_k integer default 6
+) returns table(
+  chunk_id uuid,
+  knowledge_source_id uuid,
+  source_name text,
+  content text,
+  similarity real,
+  metadata jsonb
+)
+  language plpgsql stable security definer
+  set search_path to 'public'
+as $$
+begin
+  if auth.uid() is null
+     and coalesce(nullif(auth.role(), ''), nullif(current_setting('role', true), ''), '') <> 'service_role' then
+    raise exception 'caller_not_authorized_for_org'
+      using hint = 'fn_buscar_trechos_textuais_das_fontes: anonymous callers are not authorized';
+  end if;
+  if auth.uid() is not null and not public.fn_role_at_least(p_organization_id, 'viewer') then
+    raise exception 'caller_not_authorized_for_org'
+      using hint = 'fn_buscar_trechos_textuais_das_fontes: caller must be an active member of the organization';
+  end if;
+
+  return query
+  with query_terms as (
+    select to_tsquery(
+      'portuguese',
+      coalesce(
+        (select string_agg(quote_literal(lexeme), ' | ')
+           from unnest(tsvector_to_array(to_tsvector('portuguese', p_query))) as lexeme),
+        'zzemptyzz'
+      )
+    ) as terms
+  )
+  select c.id,
+         c.knowledge_source_id,
+         s.name,
+         c.content,
+         ts_rank_cd(to_tsvector('portuguese', c.content), query_terms.terms)::real,
+         c.metadata
+    from public.ai_chunks c
+    join public.ai_knowledge_sources s
+      on s.id = c.knowledge_source_id
+     and s.organization_id = c.organization_id
+    cross join query_terms
+   where c.organization_id = p_organization_id
+     and s.id = any(p_source_ids)
+     and s.is_active
+     and s.status = 'ready'
+     and c.kb_version_id = s.active_kb_version_id
+     and to_tsvector('portuguese', c.content) @@ query_terms.terms
+   order by ts_rank_cd(to_tsvector('portuguese', c.content), query_terms.terms) desc,
+            c.position asc
+   limit greatest(least(p_k, 20), 0);
+end $$;
+
+comment on function public.fn_buscar_trechos_textuais_das_fontes(uuid, uuid[], text, integer) is
+  'Busca lexical em português para chunks text-only: tenant/source/version scoped, membership checked, ordenada por relevância textual.';
+
+revoke execute on function public.fn_buscar_trechos_textuais_das_fontes(uuid, uuid[], text, integer) from public, anon;
+grant execute on function public.fn_buscar_trechos_textuais_das_fontes(uuid, uuid[], text, integer) to authenticated, service_role;
+
 -- ---- a trava de imutabilidade da versão publicada cobre as duas colunas
 -- que ficaram de fora (migration 0503, issue #2003) ----
 -- A lista de `fn_ai_agent_version_content_immutable` é escrita à mão e, desde
@@ -47319,84 +47397,6 @@ alter table public.ai_agent_versions
   add constraint ai_agent_versions_inbound_debounce_ms_check
   check (inbound_debounce_ms is null or (inbound_debounce_ms >= 0 and inbound_debounce_ms <= 60000));
 
-
--- ---- chunks textuais para organizações free-only (migration 0560) ----
--- Vetores existentes seguem intactos; NULL identifica apenas chunks de versões
--- text-only, que são consultados pelo caminho Portuguese full-text do runtime.
-alter table public.ai_chunks
-  alter column embedding drop not null;
-
-comment on column public.ai_chunks.embedding is
-  'Vetor do chunk quando a versão usa busca vetorial; NULL para versões text-only (embedding_model=text-only), consultadas por full-text search.';
-
--- ---- busca textual do acervo free-only (migration 0561) ----
--- Usa o mesmo escopo tenant/source/version da busca vetorial. `similarity` aqui
--- é rank lexical, não uma medida vetorial.
-create or replace function public.fn_buscar_trechos_textuais_das_fontes(
-  p_organization_id uuid,
-  p_source_ids uuid[],
-  p_query text,
-  p_k integer default 6
-) returns table(
-  chunk_id uuid,
-  knowledge_source_id uuid,
-  source_name text,
-  content text,
-  similarity real,
-  metadata jsonb
-)
-  language plpgsql stable security definer
-  set search_path to 'public'
-as $$
-begin
-  if auth.uid() is null
-     and coalesce(nullif(auth.role(), ''), nullif(current_setting('role', true), ''), '') <> 'service_role' then
-    raise exception 'caller_not_authorized_for_org'
-      using hint = 'fn_buscar_trechos_textuais_das_fontes: anonymous callers are not authorized';
-  end if;
-  if auth.uid() is not null and not public.fn_role_at_least(p_organization_id, 'viewer') then
-    raise exception 'caller_not_authorized_for_org'
-      using hint = 'fn_buscar_trechos_textuais_das_fontes: caller must be an active member of the organization';
-  end if;
-
-  return query
-  with query_terms as (
-    select to_tsquery(
-      'portuguese',
-      coalesce(
-        (select string_agg(quote_literal(lexeme), ' | ')
-           from unnest(tsvector_to_array(to_tsvector('portuguese', p_query))) as lexeme),
-        'zzemptyzz'
-      )
-    ) as terms
-  )
-  select c.id,
-         c.knowledge_source_id,
-         s.name,
-         c.content,
-         ts_rank_cd(to_tsvector('portuguese', c.content), query_terms.terms)::real,
-         c.metadata
-    from public.ai_chunks c
-    join public.ai_knowledge_sources s
-      on s.id = c.knowledge_source_id
-     and s.organization_id = c.organization_id
-    cross join query_terms
-   where c.organization_id = p_organization_id
-     and s.id = any(p_source_ids)
-     and s.is_active
-     and s.status = 'ready'
-     and c.kb_version_id = s.active_kb_version_id
-     and to_tsvector('portuguese', c.content) @@ query_terms.terms
-   order by ts_rank_cd(to_tsvector('portuguese', c.content), query_terms.terms) desc,
-            c.position asc
-   limit greatest(least(p_k, 20), 0);
-end $$;
-
-comment on function public.fn_buscar_trechos_textuais_das_fontes(uuid, uuid[], text, integer) is
-  'Busca lexical em português para chunks text-only: tenant/source/version scoped, membership checked, ordenada por relevância textual.';
-
-revoke execute on function public.fn_buscar_trechos_textuais_das_fontes(uuid, uuid[], text, integer) from public, anon;
-grant execute on function public.fn_buscar_trechos_textuais_das_fontes(uuid, uuid[], text, integer) to authenticated, service_role;
 
 -- ---- a chave de mapas da organização (migration 0504) ----
 -- Pino do WhatsApp → rua/cidade/região aproximados (lib/mapas/). Server-side only.
