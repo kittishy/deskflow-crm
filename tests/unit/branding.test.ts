@@ -870,6 +870,12 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     motivo:
       "painel onde o operador pega a chave dele (`lib/ai/pontos/provedores.ts`, campo `ondePegarAChave` da Groq). É o link que a tela mostra para buscar a credencial — painel do fornecedor, não texto de interface.",
   },
+  // ── contingência gratuita OpenCode Zen (0563): destino + onde a chave sai ──
+  "opencode.ai": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "endpoint da API OpenCode Zen (`lib/agent-engine/edge/llm/providers.ts`, base `https://opencode.ai/zen/v1`) e a página onde a organização pega a própria chave (`lib/ai/pontos/provedores.ts`, campo `ondePegarAChave`). É o destino do request, com a chave da PRÓPRIA organização — trocar pelo domínio do revendedor quebraria a chamada. O catálogo 0563 limita os modelos aos gratuitos sem treinamento, e sem chave cadastrada o código não fala com ele.",
+  },
   // ── identificador de fio: NÃO é destino de chamada nem texto de tela ──────
   "s.whatsapp.net": {
     categoria: "PROTOCOLO",
