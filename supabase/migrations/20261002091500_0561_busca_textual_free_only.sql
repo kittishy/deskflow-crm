@@ -1,4 +1,4 @@
--- 0503 — Busca textual do acervo para organizações free-only
+-- 0561 — Busca textual do acervo para organizações free-only
 -- Usa o mesmo escopo de organização, fontes ativas e versão publicada da busca
 -- vetorial. A ordenação é lexical; não representa similaridade vetorial.
 create or replace function public.fn_buscar_trechos_textuais_das_fontes(

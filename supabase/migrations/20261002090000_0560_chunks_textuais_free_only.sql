@@ -1,4 +1,4 @@
--- 0502 — Chunks textuais para organizações free-only
+-- 0560 — Chunks textuais para organizações free-only
 -- `embedding` permanece preenchido para índices vetoriais e pode ser NULL
 -- somente nos índices marcados `text-only` em `ai_knowledge_versions`.
 -- A consulta free-only usa PostgreSQL full-text search com escopo tenant/source.

@@ -46553,13 +46553,13 @@ on conflict (provider, model_id) do update set
   supports_tools = excluded.supports_tools,
   supports_vision = excluded.supports_vision;
 
--- ---- Catálogo da Groq (migration 0504) ----
+-- ---- Catálogo da Groq (migration 0562) ----
 --
 -- OpenAI-compatível, como DeepSeek e Requesty: ids e preços verificados em
 -- `https://console.groq.com/docs/models` e na página do modelo, convertidos
 -- para CENTAVOS por milhão. Não insere em `ai_pricing`; o backfill 0113 acima
 -- cria a linha por `model_id` na próxima reaplicação. Racional inteiro na
--- migration 0504.
+-- migration 0562.
 insert into public.ai_models
   (provider, model_id, display_name, description, context_window,
    input_price_per_million_cents, output_price_per_million_cents,
@@ -46583,7 +46583,7 @@ on conflict (provider, model_id) do update set
   supports_tools = excluded.supports_tools,
   supports_vision = excluded.supports_vision;
 
--- ---- Catálogo OpenCode Zen gratuito (migration 0505) ----
+-- ---- Catálogo OpenCode Zen gratuito (migration 0563) ----
 -- Só os modelos declarados temporariamente gratuitos, sem retenção e sem
 -- treinamento. Sem tools, Muse Contributor, trial NVIDIA ou modelos pagos.
 insert into public.ai_models
@@ -47320,7 +47320,7 @@ alter table public.ai_agent_versions
   check (inbound_debounce_ms is null or (inbound_debounce_ms >= 0 and inbound_debounce_ms <= 60000));
 
 
--- ---- chunks textuais para organizações free-only (migration 0502) ----
+-- ---- chunks textuais para organizações free-only (migration 0560) ----
 -- Vetores existentes seguem intactos; NULL identifica apenas chunks de versões
 -- text-only, que são consultados pelo caminho Portuguese full-text do runtime.
 alter table public.ai_chunks
@@ -47329,7 +47329,7 @@ alter table public.ai_chunks
 comment on column public.ai_chunks.embedding is
   'Vetor do chunk quando a versão usa busca vetorial; NULL para versões text-only (embedding_model=text-only), consultadas por full-text search.';
 
--- ---- busca textual do acervo free-only (migration 0503) ----
+-- ---- busca textual do acervo free-only (migration 0561) ----
 -- Usa o mesmo escopo tenant/source/version da busca vetorial. `similarity` aqui
 -- é rank lexical, não uma medida vetorial.
 create or replace function public.fn_buscar_trechos_textuais_das_fontes(

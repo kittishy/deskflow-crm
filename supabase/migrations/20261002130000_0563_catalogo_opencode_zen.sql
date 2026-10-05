@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0505: MODELOS GRATUITOS E SEM TREINAMENTO DO OPENCODE ZEN
+-- 0563: MODELOS GRATUITOS E SEM TREINAMENTO DO OPENCODE ZEN
 --
 -- O CRM só publica Space Bunny Free e LongCat 2.5 Preview Free. A documentação
 -- do Zen declara ambos temporariamente gratuitos, com retenção zero e sem uso

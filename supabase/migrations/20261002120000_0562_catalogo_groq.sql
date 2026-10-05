@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0504: CATÁLOGO DA GROQ
+-- 0562: CATÁLOGO DA GROQ
 --
 -- A Groq é OpenAI-compatível: entra pelo vocabulário aberto de `provider` da
 -- 0127 e pela mesma fábrica `@ai-sdk/openai` com base URL própria e `.chat()`,
