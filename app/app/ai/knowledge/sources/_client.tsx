@@ -3,7 +3,7 @@
 import { useT } from "@/hooks/i18n/useT";
 import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, RefreshCw } from "lucide-react";
+import { ArrowsClockwise, Plus } from "@/lib/ui/icons";
 
 import { Button } from "@/components/ui/button";
 import { useRealtimeChannel } from "@/hooks/realtime/useRealtimeChannel";
@@ -90,7 +90,7 @@ export function AcervoClient({ initialSources, initialChave, agentes }: Props) {
               disabled={reindexAll.isPending || !estado.pode_indexar}
               data-testid="acervo-reindexar-tudo"
             >
-              <RefreshCw
+              <ArrowsClockwise
                 className={`mr-2 h-4 w-4 ${reindexAll.isPending ? "animate-spin" : ""}`}
                 aria-hidden
               />
@@ -98,7 +98,7 @@ export function AcervoClient({ initialSources, initialChave, agentes }: Props) {
             </Button>
           ) : null}
           <Button onClick={() => setNovoAberto(true)} data-testid="acervo-adicionar">
-            <Plus className="mr-2 h-4 w-4" aria-hidden />
+            <Plus weight="bold" className="mr-2 h-4 w-4" aria-hidden />
             {t("Adicionar material")}
           </Button>
         </div>

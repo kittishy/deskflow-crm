@@ -9,7 +9,7 @@
  * realtime de `ai_knowledge_sources`) e o estado da chave
  * (`GET /api/v1/ai/knowledge/chave`). Nenhuma rota nova só para contar.
  */
-import { CheckCircle2, Loader2, TriangleAlert } from "lucide-react";
+import { CheckCircle, CircleNotch, Warning } from "@/lib/ui/icons";
 
 import { Card } from "@/components/ui/card";
 import { useT } from "@/hooks/i18n/useT";
@@ -76,12 +76,12 @@ export function StatusDaBase({
         </div>
         {r.preparando > 0 ? (
           <span className="flex items-center gap-1 text-xs text-text-muted">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            <CircleNotch className="h-3.5 w-3.5 animate-spin" aria-hidden />
             {t("preparando o material…")}
           </span>
         ) : podeIndexar && r.comErro === 0 && r.prontos === r.total ? (
           <span className="flex items-center gap-1 text-xs text-success-fg">
-            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+            <CheckCircle weight="duotone" className="h-3.5 w-3.5" aria-hidden />
             {t("tudo pronto")}
           </span>
         ) : null}
@@ -89,7 +89,7 @@ export function StatusDaBase({
 
       {r.comErro > 0 ? (
         <p className="flex items-start gap-1.5 text-xs text-warning-fg">
-          <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <Warning weight="duotone" className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           {t(
             "Alguns materiais falharam ao preparar. O motivo está no cartão de cada um; depois de corrigir, clique em “Preparar tudo de novo”.",
           )}
