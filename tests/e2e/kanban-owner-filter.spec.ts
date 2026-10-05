@@ -72,6 +72,38 @@ test("filtro por responsável reflete na URL e esconde leads com dono", async ({
   await expect(owned).toHaveCount(0);
 });
 
+for (const largura of [1440, 390]) {
+  test(`busca sem resultado explica o vazio e limpar recupera os cards (${largura}px)`, async ({ page }) => {
+    await page.setViewportSize({ width: largura, height: 900 });
+    await login(page, creds.users.manager!.email);
+    const caminho = `/app/pipelines/${creds.kanban!.pipeline_id}`;
+    await page.goto(caminho);
+    await expect(page.getByRole("heading", { name: "Pedido E2E com responsavel" })).toBeVisible();
+    const colunas = page.locator("[data-rfd-droppable-id]");
+    const quantidade = await colunas.count();
+    expect(quantidade).toBeGreaterThan(0);
+
+    await page.goto(`${caminho}?q=__busca_sintetica_sem_resultado_ux__`);
+    const aviso = page.getByRole("group", { name: "Nenhum lead com esses filtros", exact: true });
+    await expect(aviso).toBeVisible();
+    await expect(aviso.getByRole("status")).toContainText("Ativos: Busca");
+    await expect(colunas).toHaveCount(quantidade);
+    await expect(page.getByText("Nenhum lead nesta pipeline ainda.", { exact: true })).toHaveCount(0);
+    const limpar = aviso.getByRole("button", { name: "Limpar filtros", exact: true });
+    if (largura < 1024) {
+      const alvo = await limpar.boundingBox();
+      expect(alvo?.height).toBeGreaterThanOrEqual(44);
+    }
+    await limpar.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`${caminho}$`));
+    await expect(aviso).toHaveCount(0);
+    await expect(page.getByRole("searchbox")).toHaveValue("");
+    await expect(page.getByRole("heading", { name: "Pedido E2E com responsavel" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pedido E2E sem responsavel" })).toBeVisible();
+  });
+}
+
 /**
  * #916 / PR #919 — arrastar o MESMO card duas vezes seguidas, pela tela.
  *

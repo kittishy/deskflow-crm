@@ -56,6 +56,14 @@ export function FilterBar({ filters, onChange, leads, settings }: FilterBarProps
   const { data: members } = useAssignableMembers(true);
   const { data: agents } = useAssignableAgents(true);
   const [searchInput, setSearchInput] = useState(filters.search ?? "");
+  const [ultimaBuscaAplicada, setUltimaBuscaAplicada] = useState(filters.search ?? "");
+  // A URL também muda fora desta barra (limpar pelo aviso, voltar, deep link).
+  // Reconcilia antes do commit para o debounce não reaplicar uma busca antiga.
+  const buscaAplicada = filters.search ?? "";
+  if (buscaAplicada !== ultimaBuscaAplicada) {
+    setUltimaBuscaAplicada(buscaAplicada);
+    setSearchInput(buscaAplicada);
+  }
 
   // Debounce search 250ms
   useEffect(() => {
