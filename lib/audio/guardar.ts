@@ -44,7 +44,7 @@ export interface FalaPronta {
  *
  * A extensão vem do que o PROVEDOR devolveu (`audio.extensao`), nunca de uma
  * constante: um provedor que volte opus tem que ser gravado como `.opus`, ou o
- * probe do ffmpeg no `convert` do WAHA cai no lugar errado.
+ * probe do ffmpeg no `convert` do adapter do canal cai no lugar errado.
  */
 export function caminhoDaFala(input: {
   tenantId: string;

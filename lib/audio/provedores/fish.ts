@@ -14,7 +14,7 @@
  *
  * `format` aceita `wav | pcm | mp3 | opus` — NÃO aceita `ogg`. Pedimos `mp3`,
  * que é o default documentado deles e o formato de maior certeza de probe
- * para o `convert: true` do WAHA.
+ * para o `convert: true` do adapter do canal.
  *
  * `reference_id` é o id do modelo de voz (a doc: "Single speaker: voice model
  * ID string"). Sem ele — e sem `references` — a chamada não tem voz; quem

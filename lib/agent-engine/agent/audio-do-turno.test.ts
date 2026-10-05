@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { sintetizarFala } from "@/lib/audio/sintese";
-import { wahaSendPlanFor } from "@/lib/waha/media-send";
 
 import { corpoDoEnvio } from "../edge/crm/send-message";
 
@@ -19,7 +18,7 @@ const AGENTE = "dddddddd-0000-4000-8000-000000000001";
 
 const LINHA = { tts_enabled: true, tts_provider: "fish", tts_voice_id: "voz-da-casa" };
 
-/** Preferência de voz como a migration 0506 a deixa no `ai_agents`. */
+/** Preferência de voz como a migration 0554 a deixa no `ai_agents`. */
 function banco(linha: Partial<typeof LINHA> | null = LINHA) {
   const query = vi.fn(async (_sql: string, valores: unknown[]) => ({
     rows: linha ? [linha] : [],
@@ -243,13 +242,15 @@ describe("corpoDoEnvio — o kind da mídia decide o type que o handler recebe",
 });
 
 /**
- * O CAMINHO INTEIRO, do texto ao endpoint do canal, com o provedor e o
- * `guardar` de verdade e só o Storage e o WAHA dubados.
+ * O CAMINHO INTEIRO, do texto ao corpo que o handler de mensagens recebe, com
+ * o provedor e o `guardar` de verdade e só a rede e o upload dubados.
  *
- * É este teste que fecha a DONE WHEN no que é provável aqui: sem WAHA vivo não
- * existe prova de entrega, mas existe — e é medida — prova de que o arquivo
- * nasce na pasta da conversa, sai como `type: "audio"` e chega ao `sendVoice`
- * com `convert: true`, que é quem embrulha no OGG/OPUS que o WhatsApp exige.
+ * É este teste que fecha a DONE WHEN no que é provável aqui: sem o canal vivo
+ * não existe prova de entrega, mas existe — e é medida — prova de que o
+ * arquivo nasce na pasta da conversa e sai como `type: "audio"` com o caminho
+ * e o mime que o endpoint de voz precisa. O plano de envio (sendVoice com
+ * `convert: true`, que embrulha no OGG/OPUS que o canal exige) é o adapter que
+ * monta — coberto pelo teste do transporte.
  */
 describe("texto → áudio na pasta da conversa → sendVoice", () => {
   it("gera o arquivo, grava em whatsapp-media/<org>/<conversa>/ e sai pelo endpoint de voz", async () => {
@@ -296,12 +297,10 @@ describe("texto → áudio na pasta da conversa → sendVoice", () => {
     expect(corpo.type).toBe("audio");
     expect(corpo.media_storage_path).toBe(enviados[0]?.destino);
 
-    // 3. O endpoint do canal. `convert: true` é o WAHA embrulhando em OGG/OPUS.
-    const plano = wahaSendPlanFor(corpo.type as string, {
-      url: "https://storage-assinada/ok",
-      mime: corpo.media_mime ?? "application/octet-stream",
-    });
-    expect(plano.endpoint).toBe("sendVoice");
-    expect(plano.payload.convert).toBe(true);
+    // 3. O corpo carrega tudo que o endpoint de voz precisa: tipo áudio,
+    // caminho assinado e mime real.
+    expect(corpo.type).toBe("audio");
+    expect(corpo.media_storage_path).toBe(enviados[0]?.destino);
+    expect(corpo.media_mime).toBe("audio/mpeg");
   });
 });

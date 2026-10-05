@@ -9,8 +9,8 @@
  * O áudio NÃO vai ao canal como bytes nem como URL: o provedor devolve os
  * bytes, `guardar.ts` os põe em `whatsapp-media/<org>/<conversa>/`, e quem
  * assina a URL curta é o handler de mensagens — como em toda mídia. O
- * contêiner que o WhatsApp exige (OGG/OPUS) é problema do WAHA, que já pede
- * `convert: true` em `wahaSendPlanFor("audio")`.
+ * contêiner que o canal exige (OGG/OPUS) é problema do adapter do canal,
+ * que já pede conversão (`convert: true`).
  */
 
 /** Provedores que o produto conhece. Grafia fora daqui = degrada, não chama URL nenhuma. */
@@ -31,9 +31,9 @@ export interface CredenciaisDeVoz {
  * O que o provedor DEVOLVEU — não o que o WhatsApp quer.
  *
  * `mime`/`extensao` descrevem os bytes com honestidade (nada de chamar mp3 de
- * ogg): a conversão para o formato do WhatsApp é do WAHA (`convert: true`),
- * que abre o arquivo e remixa. Declarar um tipo que os bytes não têm faria o
- * probe falhar no lugar errado.
+ * ogg): a conversão para o formato que o canal exige é do adapter
+ * (`convert: true`), que abre o arquivo e remixa. Declarar um tipo que os
+ * bytes não têm faria o probe falhar no lugar errado.
  */
 export interface AudioSintetizado {
   bytes: Uint8Array;
