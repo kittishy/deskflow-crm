@@ -39,6 +39,8 @@ export {
   // Evolução da IA), e um terceiro gráfico deixaria as três linhas do menu
   // indistinguíveis de relance. Mesma família Phosphor, mesmo peso.
   Megaphone,
+  // catálogo de materiais (tipo "catalogo" do acervo de conhecimento)
+  Package,
   // health dashboard
   WifiHigh,
   Brain,
@@ -54,6 +56,7 @@ export {
   Smiley,
   Check,
   Checks,
+  Circle,
   X,
   Plus,
   Trash,
@@ -123,6 +126,7 @@ export {
   CaretDoubleRight,
   CaretLeft,
   CaretRight,
+  ArrowLeft,
   ArrowRight,
   SignOut,
   WebhooksLogo,
