@@ -59,8 +59,16 @@ SEGREDO_SEGURO="$(printf '%s' "$INTERNAL_SECRET" | sed "s/'/'\\\\''/g")"
 CRONS="
 * * * * *|240|api/v1/cron/prospecting
 * * * * *|25|api/v1/cron/agent-dispatcher
+# O ASSISTIDO. Um job por rodada, e só com as envs AI_ASSISTED_* declaradas —
+# sem elas a rota devolve 503 sem tocar em nada, então a linha é barata numa
+# instalação que nunca ligou o modo assistido.
+* * * * *|240|api/v1/cron/assisted-agent-once
 * * * * *|25|api/v1/cron/followup-flow-worker
 * * * * *|45|api/v1/cron/event-log-drain
+# O DRENO REMOTO. Par do event-log-drain para eventos que chegam de fora
+# (filas remotas): despacha para os mesmos workers (mídia, RAG, push).
+# Mesma cadência do par local — um evento remoto parado é dado parado.
+* * * * *|45|api/v1/cron/remote-event-drain
 * * * * *|25|api/v1/cron/routing-worker
 * * * * *|25|api/v1/cron/recover-stuck-messages
 * * * * *|25|api/v1/cron/proposta-travada

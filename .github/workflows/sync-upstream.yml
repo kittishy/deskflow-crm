@@ -1,0 +1,71 @@
+name: sync-upstream
+
+# Traz a main do produto (melgarafael/DeskcommCRM) para dentro do fork
+# SEM push direto e SEM merge automático: o resultado sai como PR para
+# revisão humana, ou como issue quando há conflito.
+#
+# Por que não fast-forward direto na main: o fork carrega customizações
+# (provedores, marca, migrations próprias) e 1104 commits de atraso viraram
+# 7 conflitos reais no primeiro sync — merge silencioso quebraria a VPS.
+# Só roda neste fork (`if: github.repository`), nunca no produto.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # segundas 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync:
+    if: github.repository == 'kittishy/deskflow-crm'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tenta o merge do upstream numa branch
+        id: merge
+        run: |
+          git remote add upstream https://github.com/melgarafael/DeskcommCRM.git
+          git fetch upstream main
+          ATRASO=$(git rev-list --count HEAD..upstream/main)
+          echo "atraso=$ATRASO"
+          echo "atraso=$ATRASO" >> "$GITHUB_OUTPUT"
+          if [ "$ATRASO" = "0" ]; then
+            echo "ja_em_dia=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git checkout -B "chore/sync-upstream-$(date +%F)"
+          if git merge --no-edit upstream/main; then
+            echo "conflito=false" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort
+            echo "conflito=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Abre PR com o sync limpo
+        if: steps.merge.outputs.ja_em_dia != 'true' && steps.merge.outputs.conflito == 'false'
+        run: |
+          git push -u origin "HEAD:chore/sync-upstream-$(date +%F)"
+          gh pr create \
+            --title "chore(sync): upstream $(date +%F) (+${{ steps.merge.outputs.atraso }} commits)" \
+            --body "Sync semanal automático. Merge limpo, sem conflito — revisar o diff e rodar os gates antes de mergear: \`pnpm gov:verify\` + \`pnpm test:db\` (tocou schema?) + prova de tela (tocou UI?). Nunca dar merge com vermelho." \
+            --label sync-upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Abre issue quando há conflito
+        if: steps.merge.outputs.conflito == 'true'
+        run: |
+          CONFLITOS=$(git diff --name-only --diff-filter=U upstream/main 2>/dev/null || echo "ver no clone")
+          gh issue create \
+            --title "sync upstream $(date +%F): conflito precisa de mão humana" \
+            --body "O merge automático falhou. Arquivos em conflito: ${CONFLITOS}. Resolver no clone com \`git merge upstream/main\` numa branch, rodar \`pnpm gov:verify\` + \`pnpm test:db\`, e abrir o PR à mão." \
+            --label sync-upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -229,6 +229,12 @@ describe("a sétima cópia não nasce", () => {
       motivo: "`organizations.display_name` do controlador no export de LGPD",
     },
     {
+      arquivo: "lib/prospecting/fontes/osm.ts",
+      trecho: "primeiro.display_name ?? local",
+      motivo:
+        "nome do LUGAR do OpenStreetMap (campo `display_name` do Nominatim/Overpass), não de contato — é o endereço que vira candidato da prospecção gratuita",
+    },
+    {
       arquivo: "lib/lgpd/export-collector.ts",
       trecho: "display_name: data.display_name ?? null,",
       motivo: "o export de LGPD entrega as DUAS colunas do titular cruas; não decide nome",
