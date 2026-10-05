@@ -4,15 +4,11 @@ import { describe, expect, it } from "vitest";
 
 const RAIZ = process.cwd();
 
-// Arquivos que AINDA importam lucide-react e não são nossos: as duas linhas
-// foram tocadas pelo fork (migração coral/Inter, fora do produto) e mexer nelas
-// aqui geraria conflito certo na reconciliação. Migrar + remover da lista
-// quando o fork reconciliar. A lista só encolhe: adicionar entrada nova aqui
-// sem migrar o arquivo reprova o segundo teste.
-const ALLOWLIST = [
-  "components/ai/ChaveDeConhecimento.tsx",
-  "components/ui/dialog.tsx",
-].sort();
+// Exceções temporárias, com motivo escrito: arquivo que ainda importa
+// lucide-react porque migrá-lo agora colidiria com trabalho em voo. A lista
+// só encolhe — hoje está zerada (dialog.tsx e ChaveDeConhecimento.tsx foram
+// migrados na mesma linha do fork, sem reconciliação pendente).
+const ALLOWLIST: string[] = [];
 
 const DIRETORIOS = ["app", "components", "lib", "hooks", "workers", "scripts"];
 
