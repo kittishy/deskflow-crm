@@ -73,7 +73,7 @@ test("filtro por responsável reflete na URL e esconde leads com dono", async ({
 });
 
 for (const largura of [1440, 390]) {
-  test(`busca sem resultado explica o vazio e limpar recupera os cards (${largura}px)`, async ({ page }) => {
+  test(`busca sem resultado explica o vazio e limpar recupera os cards (${largura}px)`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: largura, height: 900 });
     await login(page, creds.users.manager!.email);
     const caminho = `/app/pipelines/${creds.kanban!.pipeline_id}`;
@@ -94,6 +94,10 @@ for (const largura of [1440, 390]) {
       const alvo = await limpar.boundingBox();
       expect(alvo?.height).toBeGreaterThanOrEqual(44);
     }
+    await testInfo.attach("kanban-filtrado", {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
     await limpar.focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(`${caminho}$`));
@@ -101,6 +105,10 @@ for (const largura of [1440, 390]) {
     await expect(page.getByRole("searchbox")).toHaveValue("");
     await expect(page.getByRole("heading", { name: "Pedido E2E com responsavel" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Pedido E2E sem responsavel" })).toBeVisible();
+    await testInfo.attach("kanban-apos-limpar", {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
   });
 }
 
