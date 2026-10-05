@@ -111,7 +111,7 @@ export function BarraDeProgressoNavegacao() {
       className="pointer-events-none fixed inset-x-0 top-0 z-[9999] h-[2px] bg-transparent"
     >
       <div
-        className="h-full bg-primary shadow-[0_0_8px_var(--color-primary)] transition-all duration-200 ease-out"
+        className="h-full bg-primary shadow-[0_0_8px_var(--color-primary)] transition-[width] duration-200 ease-out"
         style={{
           width: `${progresso}%`,
           opacity: progresso === 100 ? 0 : 1,
