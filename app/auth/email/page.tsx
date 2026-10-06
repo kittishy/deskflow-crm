@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { acceptEmailSession } from "@/app/actions/auth/acceptEmailSession";
+import { useT } from "@/hooks/i18n/useT";
 
 export default function EmailReturnPage() {
   const started = useRef(false);
   const [failed, setFailed] = useState(false);
+  const t = useT();
   useEffect(() => {
     if (started.current) return;
     started.current = true;
@@ -25,8 +27,14 @@ export default function EmailReturnPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="space-y-4 text-center" role="status">
-        <h1 className="text-2xl font-semibold">{failed ? "Link inválido ou expirado" : "Abrindo seu acesso…"}</h1>
-        {failed && <Link href="/login" className="underline">Voltar para entrar ou recuperar sua senha</Link>}
+        <h1 className="text-2xl font-semibold">
+          {failed ? t("Link inválido ou expirado") : t("Abrindo seu acesso…")}
+        </h1>
+        {failed && (
+          <Link href="/login" className="underline">
+            {t("Voltar para entrar ou recuperar sua senha")}
+          </Link>
+        )}
       </div>
     </main>
   );

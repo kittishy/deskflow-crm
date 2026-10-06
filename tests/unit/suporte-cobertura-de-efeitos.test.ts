@@ -51,6 +51,14 @@ it("todo handler mutante do app declara guarda de suporte ou é infraestrutura i
   // seria um no-op que devolve 503 quando o GoTrue oscila.
   if(path==="app/api/v1/tenants/provision/route.ts")continue;
   if(path.includes("/impersonate"))continue; // início/fim autenticam a posse e têm contrato próprio
+   // NPS público (0555): a credencial é o token uuid NA URL e a organização vem
+   // da LINHA que ele identifica (ver a rota). Quem responde é o cliente final
+   // da empresa dona, no celular, sem sessão nossa — a mesma natureza de
+   // `rastreio/[id]`, `anuncios/**` e `plataformas-de-anuncio/*/callback`, todas
+   // fora por terem entrada em `lib/auth/public-paths.ts`. Não há cookie de
+   // suporte para a guarda ler: chamar `requireSupportWrite()` aqui seria um
+   // no-op que devolveria 503 a quem só queria deixar uma nota.
+   if(path.startsWith("app/api/v1/nps/"))continue;
   const source=ts.createSourceFile(path,readFileSync(path,"utf8"),ts.ScriptTarget.Latest,true);
   // DUAS FORMAS de exportar um handler, e o gate precisa das duas. A varredura
   // só enxergava `export async function POST`; `export const PATCH = async () => {}`

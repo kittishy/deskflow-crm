@@ -14388,6 +14388,24 @@ export const DICIONARIO: Traducoes = {
   "Opção de histórico salva.": { es: "Opción de historial guardada." },
   "Não foi possível guardar esta opção.": { es: "No fue posible guardar esta opción." },
 
+  // ── busca textual free-only (0561): o acervo sem embedding pago ──────────
+  "Correspondência textual": { es: "Coincidencia textual" },
+  "Busca textual em português; resultados ordenados por correspondência.": {
+    es: "Búsqueda textual en portugués; resultados ordenados por coincidencia.",
+  },
+  "O acervo usa busca textual em português.": {
+    es: "El acervo usa búsqueda textual en portugués.",
+  },
+  "Esta organização não precisa de chave de embedding; a busca não usa embeddings pagos.": {
+    es: "Esta organización no necesita clave de embedding; la búsqueda no usa embeddings de pago.",
+  },
+
+  // ── tela de retorno do link de e-mail (app/auth/email) ──────────────────
+  "Link inválido ou expirado": { es: "Enlace no válido o caducado" },
+  "Abrindo seu acesso…": { es: "Abriendo tu acceso…" },
+  "Voltar para entrar ou recuperar sua senha": {
+    es: "Volver a entrar o recuperar tu contraseña",
+  },
 };
 
 /**
