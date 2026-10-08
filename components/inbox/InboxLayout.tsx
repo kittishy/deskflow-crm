@@ -19,6 +19,8 @@ import { useConversation, isNotFound } from "@/hooks/inbox/useConversation";
 import { ConversationList } from "./ConversationList";
 import { InboxFilters, type InboxFiltersValue, type InboxTab } from "./InboxFilters";
 import { ChatThread } from "./ChatThread";
+import { FilaDeEnvioPanel } from "./FilaDeEnvioPanel";
+import { roleAtLeast } from "@/lib/auth/types";
 import { Composer, type ComposerHandle } from "./Composer";
 import { ConversationHeader } from "./ConversationHeader";
 import { RetentionNotice } from "./RetentionNotice";
@@ -559,6 +561,7 @@ export function InboxLayout({ initialSelectedId = null, rascunho = null }: Inbox
               buscaAberta={buscaAberta}
               botaoBuscaRef={botaoBuscaRef}
             />
+            <FilaDeEnvioPanel readOnly={supportReadonly || !activeOrg || !roleAtLeast(activeOrg.role, "agent")} />
             {buscaAberta && (
               <div className="flex items-center gap-2 border-b border-border px-4 py-1.5">
                 <MagnifyingGlass size={16} className="shrink-0 text-muted-foreground" aria-hidden />

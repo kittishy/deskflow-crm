@@ -920,6 +920,21 @@ export async function sendMessageHandler(
       .maybeSingle();
     if (updated) message = updated as unknown as Message;
   } else {
+    // All existing input, contact and channel validation precedes admission.
+    if (ctx.filaEnvio && ctx.actor.type === "user" && input.type === "text" && !c.is_group) {
+      const { admitirMensagem, lerMensagemEnfileirada } = await import("@/lib/messaging/fila/operacoes");
+      const admin = createAdminClient();
+      const item = await admitirMensagem(admin, ctx, message);
+      if (item) {
+        if (item.status === "pending" && new Date(item.scheduled_at).getTime() <= Date.now()) {
+          const { rodarFila } = await import("@/lib/messaging/fila/processar");
+          await rodarFila({ admin, agora: () => new Date() }, 1);
+        }
+        const queued = await lerMensagemEnfileirada(admin, ctx.organization_id, message.id);
+        if (!queued) throw new Error("queue_message_unavailable");
+        return queued;
+      }
+    }
     try {
       // O que separa mídia de texto é a presença de `media` no envelope — o
       const checkBoundary = async () => {
@@ -1083,7 +1098,13 @@ export async function sendMessageHandler(
       } else {
         await checkBoundary();
         ({ externalId } = await adapter.send({
-          beforeSend: checkBoundary,
+          beforeSend: async () => {
+            await checkBoundary();
+            if (ctx.filaDispatch) {
+              const { autorizarDispatch } = await import("@/lib/messaging/fila/operacoes");
+              await autorizarDispatch(createAdminClient(), ctx.organization_id, ctx.filaDispatch.id, ctx.filaDispatch.token);
+            }
+          },
           organizationId: ctx.organization_id,
           sessionRef: resolveSessionRef(c.channel_sessions),
           to: chatId,
@@ -1140,6 +1161,7 @@ export async function sendMessageHandler(
       if (updated) message = updated as unknown as Message;
       }
     } catch (err) {
+      if (err instanceof Error && err.message === "queue_dispatch_revoked") throw err;
       if (err instanceof StaleServiceBoundaryError || err instanceof AgendaDeferredError || err instanceof ApprovedReplyReceiptPersistenceError) throw err;
       const msg = err instanceof Error ? err.message : adapter.codes.unknownError;
       // `storage_sign_failed` fica literal: é falha do NOSSO Storage, não do

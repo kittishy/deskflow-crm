@@ -23,6 +23,7 @@ import {
   segurarEnvioPorToken,
   type EnvioSegurado,
 } from "@/lib/messaging/ritmo-do-envio-por-token";
+import { TIPOS_DE_ENVIO, type TipoDeEnvio } from "@/lib/messaging/fila/classificacao";
 import { sendMessageSchema, validateRequest, type SendMessageInput } from "@/lib/schemas";
 import { conversaFicaComQuemAtendeu } from "@/lib/schemas/routing";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -42,6 +43,23 @@ const ENDPOINT = "POST /api/v1/messages";
 const SCOPE_EM_NOME_DE = "messages:on_behalf";
 /** Papel mínimo de quem é apontado "em nome de": atendente ou acima. */
 const PAPEL_MINIMO_EM_NOME_DE = "agent";
+
+/**
+ * O tipo de envio, quando o operador ESCOLHE na tela em vez de deixar a
+ * inferência do CRM decidir.
+ *
+ * Header, e não campo do corpo: `sendMessageSchema` é o contrato público desta
+ * rota e o `type` dele já significa outra coisa (`text`/`template`/`media`).
+ * Mexer no schema para carregar decisão de fila arrastaria validação, MCP e
+ * clientes de token. O header é opcional: sem ele, o CRM infere.
+ */
+const HEADER_DO_TIPO = "x-tipo-de-envio";
+
+function lerTipoEscolhido(req: NextRequest): TipoDeEnvio | null {
+  const bruto = req.headers.get(HEADER_DO_TIPO)?.trim();
+  if (!bruto) return null;
+  return (TIPOS_DE_ENVIO as readonly string[]).includes(bruto) ? (bruto as TipoDeEnvio) : null;
+}
 
 export async function POST(req: NextRequest): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -235,6 +253,9 @@ export async function POST(req: NextRequest): Promise<Response> {
         actor,
         requestId,
         idioma,
+        ...(authz.via === "session" && actor.type === "user"
+          ? { filaEnvio: { tipoEscolhido: lerTipoEscolhido(req) } }
+          : {}),
         // Só chega aqui com o escopo e o membership já validados acima; o
         // handler recusa se `on_behalf_of_user_id` vier sem este ctx (#1613).
         ...(onBehalf ? { onBehalfOf: onBehalf } : {}),

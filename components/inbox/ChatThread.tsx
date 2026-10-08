@@ -17,6 +17,7 @@ import { usePassagensDaConversa } from "@/hooks/inbox/usePassagensDaConversa";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useDeleteNote } from "@/hooks/inbox/useDeleteNote";
 import { useAlterarMensagem } from "@/hooks/inbox/useAlterarMensagem";
+import { useFilaDeEnvioAcoes } from "@/hooks/inbox/useFilaDeEnvio";
 import { useDebugToggle } from "@/hooks/ai/useDebugToggle";
 import { useActiveOrg, useUser } from "@/hooks/auth/AuthProvider";
 import { ROLE_RANK } from "@/lib/auth/types";
@@ -110,6 +111,9 @@ export function ChatThread({
   const currentUser = useUser();
   const deleteNote = useDeleteNote(conversationId ?? "");
   const { editar, apagar, ocultar, restaurar } = useAlterarMensagem(conversationId);
+  const filaAcoes = useFilaDeEnvioAcoes();
+  const podeAlterarFila = activeOrg != null && ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent
+    && currentUser.support?.access_mode !== "support_readonly";
   const canManage = activeOrg != null && ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager;
   const canalAlteraEnviada = transportaMensagem(provider)
     && capabilitiesOf(provider as ChannelProvider).alteraMensagemEnviada;
@@ -397,6 +401,12 @@ export function ChatThread({
                   // CRM — inclusive nas do colega, porque `sent_via='user'` só
                   // registra que um humano digitou, nunca qual.
                   viewerUserId={currentUser.id}
+                  {...(podeAlterarFila && item.data.metadata?.fila_envio ? {
+                    onEditarFila: (corpo: string) => filaAcoes.editar(item.data.metadata!.fila_envio!.id, corpo),
+                    onCancelarFila: () => filaAcoes.cancelar(item.data.metadata!.fila_envio!.id),
+                    onEnviarAgoraFila: () => filaAcoes.enviarAgora(item.data.metadata!.fila_envio!.id),
+                    onRetomarFila: () => filaAcoes.retomar(item.data.metadata!.fila_envio!.id),
+                  } : {})}
                   onEditar={canalAlteraEnviada && item.data.sent_by_user_id === currentUser.id
                     ? (text) => editar.mutateAsync({ id: item.data.id, text }).then(() => undefined)
                     : undefined}

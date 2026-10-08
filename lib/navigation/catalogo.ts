@@ -125,6 +125,24 @@ export const GRUPO_NO_RODAPE: NavGroupId = "organizacao";
  */
 export const NAV_CATALOG = [
   {
+    href: "/app/settings/whatsapp",
+    label: "WhatsApp",
+    description: "Preferências de envio das mensagens individuais.",
+    icon: "Phone",
+    group: "organizacao",
+    section: "Atendimento",
+    minRole: "admin",
+  },
+  {
+    href: "/app/settings/whatsapp/ritmo-de-envio",
+    label: "Ritmo de envio",
+    description: "Intervalos, prioridades e limite diário de novas abordagens.",
+    icon: "ClockCountdown",
+    group: "organizacao",
+    section: "Atendimento",
+    minRole: "admin",
+  },
+  {
     // SEM `sidebar: true`, e a razão não tem nada a ver com a qualidade desta
     // tela: o menu lateral está no limite medido. Com ela, seriam 20 portas, e
     // `tests/e2e/navegacao.spec.ts` reprova ("em 900px o menu inteiro tem de

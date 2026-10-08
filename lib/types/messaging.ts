@@ -74,6 +74,22 @@ export interface Conversation {
  */
 export type SentVia = "user" | "ai" | "system" | "external_device" | "automation" | "crm";
 
+/**
+ * O carimbo da fila de envio dentro de `messages.metadata.fila_envio`.
+ *
+ * A mensagem nasce com `status: "queued"` e o item da fila carrega o ciclo de
+ * vida; este objeto é o que a bolha e o painel leem para dizer "na fila",
+ * "enviando", "pausada" — sem uma segunda ida ao servidor.
+ */
+export interface FilaEnvioMetadata {
+  id: string;
+  status: "pending" | "processing" | "sent" | "paused" | "cancelled" | "failed";
+  scheduled_at: string;
+  tipo: "resposta" | "conversa_ativa" | "follow_up" | "prospeccao";
+  motivo: string | null;
+  erro: string | null;
+}
+
 export interface Message {
   id: string;
   organization_id: string;
@@ -115,7 +131,7 @@ export interface Message {
   sent_at: string;
   delivered_at: string | null;
   read_at: string | null;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown> & { fila_envio?: FilaEnvioMetadata };
   /**
    * Quando o AUTOR editou no aplicativo (migration 0143). `body` já é a versão
    * nova; este campo existe para a tela poder DIZER que houve edição — ler um

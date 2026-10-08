@@ -5,6 +5,7 @@ import type { MeetingDeliveryContext, MeetingBookingContext } from "@/lib/agenda
 import type { ProactiveContext } from "@/lib/agenda/efeito";
 import type { ServiceOrigin } from "@/lib/atendimento/origem";
 import type { ServiceBoundary } from "@/lib/atendimento/fronteira";
+import type { TipoDeEnvio } from "@/lib/messaging/fila/classificacao";
 /**
  * Shared types for `app/api/v1/<resource>/_handler.ts` core functions.
  *
@@ -109,4 +110,13 @@ export interface HandlerCtx {
    * `traduzir()`), que é o comportamento de sempre para esses dois canais.
    */
   idioma?: Idioma;
+  /**
+   * Fila de envio intervalado: presente SÓ quando a rota decidiu que este
+   * envio é de um humano digitando (sessão + ator user). O handler avalia a
+   * fila depois da validação e antes do efeito de envio. Token, MCP e IA
+   * nunca recebem este campo — o caminho deles não muda.
+   */
+  filaEnvio?: { tipoEscolhido?: TipoDeEnvio | null };
+  /** Trusted worker claim; never accepted from message metadata or request body. */
+  filaDispatch?: { id: string; token: string };
 }

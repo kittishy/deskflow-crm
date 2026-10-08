@@ -143,6 +143,13 @@ export const AUDIT_ACTIONS = [
   // Uma rodada do cron `recover-stuck-messages` que de fato marcou mensagem
   // como falha (rodada vazia não vira linha — varredura não é mutação).
   "message.recover_stuck_run",
+  // A fila de envio intervalado (migration 0558). A linha na trilha é o que
+  // responde "quando essa mensagem foi agendada, por quem e para quando" depois
+  // que a fila já a processou — o estado da fila é volátil, a trilha não.
+  "message.queued",
+  // O teto diário de novas abordagens segurou o envio. Registrar é o que permite
+  // dizer ao operador "não foi bug, foi o limite que você configurou".
+  "message.queue_blocked",
   "contact.blocked",
   "phone_number.created",
   "phone_number.updated",
@@ -1024,6 +1031,12 @@ export const AUDIT_ACTIONS = [
   // A assinatura do emissor (#2066, PR #2079): quem ligou ou desligou o nome de
   // quem fala nas mensagens ao cliente, e com que nome a IA passou a assinar.
   "settings.message_signature_updated",
+
+  // O ritmo de envio gravado em `organizations.settings.ritmo_envio` (migration
+  // 0558): o intervalo entre contatos, quem tem prioridade na fila e o teto
+  // diário de abordagens. O metadata traz o `de`/`para`, porque a pergunta que
+  // volta é "quando mudou para 90/180" e não só "quem mexeu".
+  "settings.send_pacing_updated",
 
   // A identidade da Página/WABA que a Meta exige no Purchase de clique-para-WhatsApp
   // (#2098): gravada pela tela de Conversões, em `organizations.settings.conversions`.

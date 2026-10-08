@@ -178,6 +178,18 @@ export async function executarTickDoRelogio(): Promise<{
     return summary;
   });
 
+  await uma("fila-de-envio", async () => {
+    // A fila de envio intervalado (migration 0564) entra aqui pelo MESMO caminho
+    // do resto: quem não tem agendador próprio (a Vercel é o caso) bate neste
+    // tick e a fila drena junto. Sem esta linha, instalar na hospedagem sem
+    // cron de minuto enfileirava mensagens que ninguém enviava — a fila
+    // pareceria funcionando (o balão mostra "na fila") e nenhuma sairia.
+    const { rodarFila } = await import("@/lib/messaging/fila/processar");
+    const summary = await rodarFila({ admin, agora: () => new Date() });
+    if (summary.enviados || summary.reagendados || summary.esgotados) mexeu = true;
+    return summary;
+  });
+
   await uma("recover-stuck-messages", async () => {
     const summary = await recoverStuckMessages(admin, new Date(), "relogio");
     if (summary.failed > 0) mexeu = true;

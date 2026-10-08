@@ -7674,6 +7674,139 @@ export type Database = {
           },
         ]
       }
+      message_send_queue: {
+        Row: {
+          atualizado_em: string
+          cancelado_em: string | null
+          channel_session_id: string
+          claim_token: string | null
+          contact_id: string
+          conversation_id: string
+          criado_em: string
+          criado_por_user_id: string | null
+          dispatch_started_at: string | null
+          editada_em: string | null
+          enviado_em: string | null
+          erro: string | null
+          falho_em: string | null
+          forcar_envio: boolean
+          id: string
+          intervalo_s: number
+          locked_at: string | null
+          locked_by: string | null
+          max_tentativas: number
+          message_id: string
+          organization_id: string
+          pausado_em: string | null
+          pausado_motivo: string | null
+          prioridade: number
+          scheduled_at: string
+          snapshot_body: string | null
+          snapshot_tipo: string | null
+          status: string
+          tentativas: number
+          tipo: string
+        }
+        Insert: {
+          atualizado_em?: string
+          cancelado_em?: string | null
+          channel_session_id: string
+          claim_token?: string | null
+          contact_id: string
+          conversation_id: string
+          criado_por_user_id?: string | null
+          dispatch_started_at?: string | null
+          editada_em?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          falho_em?: string | null
+          forcar_envio?: boolean
+          id?: string
+          intervalo_s?: number
+          locked_at?: string | null
+          locked_by?: string | null
+          max_tentativas?: number
+          message_id: string
+          organization_id: string
+          pausado_em?: string | null
+          pausado_motivo?: string | null
+          prioridade?: number
+          scheduled_at: string
+          snapshot_body?: string | null
+          snapshot_tipo?: string | null
+          status?: string
+          tentativas?: number
+          tipo: string
+        }
+        Update: {
+          atualizado_em?: string
+          cancelado_em?: string | null
+          channel_session_id?: string
+          claim_token?: string | null
+          contact_id?: string
+          conversation_id?: string
+          criado_por_user_id?: string | null
+          dispatch_started_at?: string | null
+          editada_em?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          falho_em?: string | null
+          forcar_envio?: boolean
+          id?: string
+          intervalo_s?: number
+          locked_at?: string | null
+          locked_by?: string | null
+          max_tentativas?: number
+          message_id?: string
+          organization_id?: string
+          pausado_em?: string | null
+          pausado_motivo?: string | null
+          prioridade?: number
+          scheduled_at?: string
+          snapshot_body?: string | null
+          snapshot_tipo?: string | null
+          status?: string
+          tentativas?: number
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_send_queue_channel_session_id_fkey"
+            columns: ["channel_session_id"]
+            isOneToOne: false
+            referencedRelation: "channel_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_send_queue_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_send_queue_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_send_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_send_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_ads_conversion_rules: {
         Row: {
           configured_at: string
@@ -10740,6 +10873,47 @@ export type Database = {
         Args: { p_job: string; p_org: string }
         Returns: boolean
       }
+      /** Migration 0564 — fila de envio intervalado. As assinaturas abaixo são o contrato que `lib/messaging/fila/` consome; o corpo (e a regra) está em `supabase/migrations/20261007120000_0564_fila_de_envio.sql`. */
+      fn_fila_envio_admitir: {
+        Args: {
+          p_organization_id: string
+          p_message_id: string
+          p_contact_id: string
+          p_conversation_id: string
+          p_channel_session_id: string
+          p_tipo: string
+          p_prioridade: number
+          p_agora: string
+          p_intervalo_minimo_s: number
+          p_intervalo_maximo_s: number
+          p_limite_diario: number
+          p_criado_por_user_id: string
+        }
+        Returns: Database["public"]["Tables"]["message_send_queue"]["Row"]
+      }
+      fn_fila_envio_alterar: {
+        Args: {
+          p_org: string
+          p_id: string
+          p_acao: string
+          p_corpo?: string
+        }
+        Returns: boolean
+      }
+      fn_fila_envio_autorizar: {
+        Args: { p_org: string; p_id: string; p_token: string }
+        Returns: boolean
+      }
+      fn_fila_envio_pausa_por_resposta: { Args: never; Returns: unknown }
+      fn_fila_envio_reivindicar: {
+        Args: { p_worker: string; p_agora: string }
+        Returns: Database["public"]["Tables"]["message_send_queue"]["Row"][]
+      }
+      fn_fila_envio_reordenar: {
+        Args: { p_org: string; p_canal: string; p_agora: string }
+        Returns: unknown
+      }
+      fn_fila_envio_sincronizar: { Args: never; Returns: unknown }
       fn_gasto_de_ia_do_mes: { Args: { p_org: string }; Returns: number }
       fn_is_platform_admin: { Args: never; Returns: boolean }
       /** Migration 0502 — mescla campos personalizados no lead DENTRO do banco, numa única instrução atômica. */

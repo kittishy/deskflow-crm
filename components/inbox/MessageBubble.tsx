@@ -48,6 +48,12 @@ interface Props {
   onApagar?: () => Promise<void>;
   onOcultar?: () => Promise<void>;
   onRestaurar?: () => Promise<void>;
+  /** Ações da fila de envio — só existem nos estados em que fazem sentido. */
+  onEditarFila?: (corpo: string) => Promise<void>;
+  onCancelarFila?: () => Promise<void>;
+  onEnviarAgoraFila?: () => Promise<void>;
+  onPausarFila?: () => Promise<void>;
+  onRetomarFila?: () => Promise<void>;
 }
 
 function AckIndicator({ status, t }: { status: string; t: (texto: string) => string }) {
@@ -74,9 +80,16 @@ export function MessageBubble({
   onApagar,
   onOcultar,
   onRestaurar,
+  onEditarFila,
+  onCancelarFila,
+  onEnviarAgoraFila,
+  onPausarFila,
+  onRetomarFila,
 }: Props) {
   const [editando, setEditando] = useState(false);
   const [texto, setTexto] = useState(message.body ?? "");
+  const [editandoFila, setEditandoFila] = useState(false);
+  const [textoFila, setTextoFila] = useState(message.body ?? "");
   const [apagando, setApagando] = useState(false);
   const [ocultando, setOcultando] = useState(false);
   const [ocupado, setOcupado] = useState(false);
@@ -194,6 +207,18 @@ export function MessageBubble({
     catch { /* O hook mostra o erro; manter o texto para nova tentativa. */ }
     finally { salvandoEdicao.current = false; setOcupado(false); }
   }
+
+  async function salvarEdicaoFila() {
+    const novoTexto = textoFila.trim();
+    if (!onEditarFila || !novoTexto || salvandoEdicao.current) return;
+    salvandoEdicao.current = true;
+    setOcupado(true);
+    try { await onEditarFila(novoTexto); setEditandoFila(false); }
+    catch { /* O hook mostra o erro; manter o texto para nova tentativa. */ }
+    finally { salvandoEdicao.current = false; setOcupado(false); }
+  }
+
+  const filaEnvio = message.metadata?.fila_envio;
 
   return (
     <div
@@ -390,6 +415,76 @@ export function MessageBubble({
               <p className="whitespace-pre-wrap wrap-anywhere leading-snug">{message.body}</p>
             )}
           </>
+        )}
+
+        {filaEnvio && (
+          <div className="mt-1 border-t border-current/20 pt-1 text-[11px]" data-testid="fila-envio">
+            {editandoFila ? (
+              <div className="space-y-2">
+                <textarea
+                  aria-label={t("Editar envio")}
+                  value={textoFila}
+                  onChange={(event) => setTextoFila(event.target.value)}
+                  maxLength={4096}
+                  className="min-h-16 w-full rounded-md border border-border bg-background p-2 text-foreground"
+                />
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="ghost" disabled={ocupado} onClick={() => setEditandoFila(false)}>{t("Cancelar")}</Button>
+                  <Button size="sm" disabled={ocupado || !textoFila.trim()} onClick={() => void salvarEdicaoFila()}>{t("Salvar")}</Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {filaEnvio.status === "pending" && (
+                  <p>
+                    {t("Na fila")} · {t("envio previsto às")}{" "}
+                    {format(new Date(filaEnvio.scheduled_at), "HH:mm", { locale: localeDaData })}
+                  </p>
+                )}
+                {filaEnvio.status === "processing" && <p>{t("Enviando…")}</p>}
+                {filaEnvio.status === "sent" && <p>{t("Enviada pela fila")}</p>}
+                {filaEnvio.status === "paused" && (
+                  <p>{t("Envio pausado porque o contato respondeu")}</p>
+                )}
+                {filaEnvio.status === "cancelled" && <p>{t("Envio cancelado")}</p>}
+                {filaEnvio.status === "failed" && (
+                  <p>{t("Falhou ao enviar")}{filaEnvio.erro ? `: ${filaEnvio.erro}` : ""}</p>
+                )}
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {filaEnvio.status === "pending" && onEditarFila && (
+                    <button type="button" className="underline underline-offset-2" onClick={() => { setTextoFila(message.body ?? ""); setEditandoFila(true); }}>
+                      {t("Editar envio")}
+                    </button>
+                  )}
+                  {filaEnvio.status === "pending" && onCancelarFila && (
+                    <button type="button" className="underline underline-offset-2" onClick={() => void onCancelarFila()}>
+                      {t("Cancelar envio")}
+                    </button>
+                  )}
+                  {filaEnvio.status === "pending" && onEnviarAgoraFila && (
+                    <button type="button" className="underline underline-offset-2" onClick={() => void onEnviarAgoraFila()}>
+                      {t("Enviar agora")}
+                    </button>
+                  )}
+                  {filaEnvio.status === "paused" && onRetomarFila && (
+                    <button type="button" className="underline underline-offset-2" onClick={() => void onRetomarFila()}>
+                      {t("Retomar envio")}
+                    </button>
+                  )}
+                  {filaEnvio.status === "paused" && onCancelarFila && (
+                    <button type="button" className="underline underline-offset-2" onClick={() => void onCancelarFila()}>
+                      {t("Cancelar envio")}
+                    </button>
+                  )}
+                  {filaEnvio.status === "paused" && onEditarFila && (
+                    <button type="button" className="underline underline-offset-2" onClick={() => { setTextoFila(message.body ?? ""); setEditandoFila(true); }}>
+                      {t("Editar envio")}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         <div

@@ -71,6 +71,13 @@ CRONS="
 * * * * *|45|api/v1/cron/remote-event-drain
 * * * * *|25|api/v1/cron/routing-worker
 * * * * *|25|api/v1/cron/recover-stuck-messages
+# A FILA DE ENVIO INTERVALADO. Minuto a minuto porque a fila só manda o que JÁ
+# venceu (`scheduled_at`): o ritmo entre contatos vive na tabela, não no cron.
+# A granularidade do cron é de 1 minuto, então o envio real acontece no primeiro
+# tick DEPOIS do horário previsto — erro de até ~60s, que é a resolução do
+# crontab e não uma escolha. Timeout curto de propósito: a rodada não espera,
+# pega o que está vencido e devolve.
+* * * * *|25|api/v1/cron/fila-de-envio
 * * * * *|25|api/v1/cron/proposta-travada
 * * * * *|45|api/v1/cron/webhook-replay
 */5 * * * *|25|api/v1/cron/storage-redaction?limit=50

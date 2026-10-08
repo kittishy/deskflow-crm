@@ -393,3 +393,96 @@ describe("MessageBubble — remetente de grupo", () => {
     expect(screen.queryByText("Maria · +5521999990000")).toBeNull();
   });
 });
+
+/**
+ * A FILA DE ENVIO na bolha: o estado da mensagem enfileirada é o que a pessoa
+ * precisa para decidir editar, cancelar ou mandar agora — e as ações só existem
+ * nos estados em que fazem sentido.
+ */
+describe("MessageBubble — fila de envio", () => {
+  const fila = (over: Partial<NonNullable<Message["metadata"]["fila_envio"]>> = {}): NonNullable<Message["metadata"]["fila_envio"]> => ({
+    id: "fila-1",
+    status: "pending",
+    scheduled_at: new Date(Date.now() + 120_000).toISOString(),
+    tipo: "resposta",
+    motivo: null,
+    erro: null,
+    ...over,
+  });
+
+  it("pendente mostra previsão e oferece editar, cancelar e enviar agora", async () => {
+    const user = userEvent.setup();
+    const onEditarFila = vi.fn(async () => undefined);
+    const onCancelarFila = vi.fn(async () => undefined);
+    const onEnviarAgoraFila = vi.fn(async () => undefined);
+    render(
+      <MessageBubble
+        message={msg({ status: "queued", metadata: { fila_envio: fila() } })}
+        onEditarFila={onEditarFila}
+        onCancelarFila={onCancelarFila}
+        onEnviarAgoraFila={onEnviarAgoraFila}
+      />,
+    );
+    expect(screen.getByText(/Na fila/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Enviar agora" }));
+    expect(onEnviarAgoraFila).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "Cancelar envio" }));
+    expect(onCancelarFila).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "Editar envio" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Editar envio" }), { target: { value: "texto novo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(onEditarFila).toHaveBeenCalledWith("texto novo"));
+  });
+
+  it("processando não oferece ações de fila", () => {
+    render(
+      <MessageBubble
+        message={msg({ status: "queued", metadata: { fila_envio: fila({ status: "processing" }) } })}
+        onEditarFila={vi.fn()}
+        onCancelarFila={vi.fn()}
+        onEnviarAgoraFila={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Enviando/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Enviar agora" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancelar envio" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Editar envio" })).not.toBeInTheDocument();
+  });
+
+  it("pausada diz por que e oferece retomar e cancelar", async () => {
+    const user = userEvent.setup();
+    const onRetomarFila = vi.fn(async () => undefined);
+    const onCancelarFila = vi.fn(async () => undefined);
+    render(
+      <MessageBubble
+        message={msg({ status: "queued", metadata: { fila_envio: fila({ status: "paused", motivo: "contato_respondeu" }) } })}
+        onRetomarFila={onRetomarFila}
+        onCancelarFila={onCancelarFila}
+      />,
+    );
+    expect(screen.getByText("Envio pausado porque o contato respondeu")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Retomar envio" }));
+    expect(onRetomarFila).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "Cancelar envio" }));
+    expect(onCancelarFila).toHaveBeenCalledOnce();
+  });
+
+  it("cancelada e falha mostram o estado sem ações", () => {
+    const { rerender } = render(
+      <MessageBubble message={msg({ status: "queued", metadata: { fila_envio: fila({ status: "cancelled" }) } })} />,
+    );
+    expect(screen.getByText("Envio cancelado")).toBeInTheDocument();
+    rerender(
+      <MessageBubble message={msg({ status: "failed", metadata: { fila_envio: fila({ status: "failed", erro: "timeout" }) } })} />,
+    );
+    expect(screen.getByText(/Falhou ao enviar/)).toBeInTheDocument();
+  });
+
+  it("enviada pela fila mostra confirmação sem ações de fila", () => {
+    render(
+      <MessageBubble message={msg({ status: "sent", metadata: { fila_envio: fila({ status: "sent" }) } })} />,
+    );
+    expect(screen.getByText(/Enviada pela fila/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Enviar agora" })).not.toBeInTheDocument();
+  });
+});
