@@ -69,7 +69,7 @@ export function useRefetchDeSeguranca<T>({
   queryKey,
   assinatura,
   ultimaEntrega,
-  intervaloMs = 45_000,
+  intervaloMs = 120_000,
   enabled = true,
 }: Opts<T>): RefetchDeSeguranca {
   const qc = useQueryClient();

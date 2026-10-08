@@ -68,7 +68,9 @@ export function useConversationCounts(
     // voltaria a mentir, agora pelo cache. Seria o mesmo defeito por outra porta.
     queryKey: ["conversation-counts", orgId, sufixo],
     enabled: !!orgId,
-    refetchInterval: 30_000,
+    // Realtime invalida esta query quando a conversa muda. O intervalo fica
+    // apenas como rede de segurança caso o socket morra silenciosamente.
+    refetchInterval: 5 * 60_000,
     queryFn: () =>
       apiClient
         .get<{ data: ConversationCounts }>(

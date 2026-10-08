@@ -170,11 +170,16 @@ export function useConversationsRealtime(
     // Mesma razão do hilo de mensagens: o inbox é a tela em que a informação
     // chega de fora enquanto ninguém olha, e voltar para a aba é quando a
     // defasagem aparece. Segunda rede — a primeira é o Realtime.
+    staleTime: 30_000,
     refetchOnWindowFocus: true,
   });
 
   const onChange = useCallback(() => {
-    qc.invalidateQueries({ queryKey: ["conversations"] });
+    // A lista e os badges derivam da mesma tabela. Realtime é o gatilho
+    // principal dos dois; assim os badges não precisam consultar o servidor
+    // a cada 30 segundos só para descobrir a mesma mudança.
+    void qc.invalidateQueries({ queryKey: ["conversations"] });
+    void qc.invalidateQueries({ queryKey: ["conversation-counts"] });
   }, [qc]);
 
   // G4-01 (visibility_mode): a subscription postgres_changes HERDA a RLS de
