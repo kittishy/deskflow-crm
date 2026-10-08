@@ -217,7 +217,7 @@ export function BudgetCard({ initialData, isAdmin }: Props) {
       <div className="mt-4 space-y-2">
         <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
-            className={`h-full transition-all ${
+            className={`h-full transition-[width] ${
               status.pct >= 100
                 ? "bg-destructive"
                 : status.pct >= status.alarm_threshold_pct

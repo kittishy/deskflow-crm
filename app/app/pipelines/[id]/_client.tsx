@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "@/lib/ui/icons";
 import type { LeadFilters } from "@/lib/kanban/filters";
 import { applyFilters, filtersFromParams, filtersToParams } from "@/lib/kanban/filters";
+import { filtrosAtivosDoKanban } from "@/lib/kanban/filtros-ativos";
 import { categoriaDoMotivo } from "@/lib/leads/motivos-de-perda-do-funil";
 import { ROLE_RANK, type Role } from "@/lib/auth/types";
 
@@ -67,6 +68,9 @@ export function PipelinePageClient({
     return (motivo: string) => categoriaDoMotivo(motivo, settings);
   }, [data?.pipeline.settings]);
   const filteredLeads = data ? applyFilters(data.leads, filters, { categoriaDo }) : [];
+  // Deriva do MESMO objeto que applyFilters usou — uma fonte só,
+  // para o notice nunca nomear um filtro que a consulta não aplicou.
+  const filtrosAtivos = useMemo(() => filtrosAtivosDoKanban(filters), [filters]);
   // NÃO é a conta do FilterBar: o seletor de filtro lista as três caixas
   // (`marcadoresDoCard`: negócio, contato e conversa), e esta lista, a da tag em
   // lote, só `lead.tags` — é lá que a ação em lote grava (#852). O `useMemo` é o
@@ -157,6 +161,8 @@ export function PipelinePageClient({
           onSelectionChange={setSelectedIds}
           leadInicial={searchParams.get("lead")}
           podeRenomearEtapa={ROLE_RANK[role] >= ROLE_RANK.manager}
+          filtrosAtivos={filtrosAtivos}
+          onLimparFiltros={() => setFilters({ status: "all" })}
         />
       )}
       <BulkActionBar

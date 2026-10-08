@@ -17,6 +17,7 @@ import type { Pipeline, Stage } from "@/lib/kanban/types";
 import { StageColumn } from "./StageColumn";
 import { LeadDossier } from "./LeadDossier";
 import { RetomarComoNovoNegocioDialog } from "./RetomarComoNovoNegocioDialog";
+import { EmptyPorFiltro } from "./EmptyPorFiltro";
 import { camposDoFunil } from "@/lib/leads/campos-do-funil";
 
 interface KanbanBoardProps {
@@ -45,6 +46,14 @@ interface KanbanBoardProps {
    * então o cabeçalho fica só leitura para eles.
    */
   podeRenomearEtapa?: boolean;
+  /**
+   * Filtros ligados no quadro, já em português (derivados do MESMO objeto que
+   * foi aplicado por `applyFilters` — ver `lib/kanban/filtros-ativos.ts`). Com leads zerados,
+   * o notice acima das colunas nomeia esses filtros em vez de mentir "vazio".
+   */
+  filtrosAtivos?: string[];
+  /** Desliga os filtros do quadro. Sem ele, o notice não oferece botão. */
+  onLimparFiltros?: () => void;
 }
 
 function groupLeadsByStage(stages: Stage[], leads: Lead[]): Map<string, Lead[]> {
@@ -89,6 +98,8 @@ export function KanbanBoard({
   onSelectionChange,
   leadInicial,
   podeRenomearEtapa = false,
+  filtrosAtivos,
+  onLimparFiltros,
 }: KanbanBoardProps) {
   const t = useT();
   const useExternal = stagesProp !== undefined && leadsProp !== undefined;
@@ -259,13 +270,30 @@ export function KanbanBoard({
   if (data.stages.length === 0) {
     return (
       <Card className="m-4 p-6 text-sm text-text-muted">
-        {t("Nenhum lead nesta pipeline ainda.")}
+        {t("Nenhuma etapa configurada.")}
       </Card>
     );
   }
 
+  // O aviso de estado é um NOTICE acima das colunas — nunca substitui o board.
+  // Com zero leads, as colunas, drop targets e o "vazio" de cada etapa
+  // continuam renderizados; o notice só diz POR QUÊ não há cards.
+  const semLeads = data.leads.length === 0;
+  const filtrado = semLeads && (filtrosAtivos?.length ?? 0) > 0;
+
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
+      {semLeads && (
+        <div className="shrink-0 px-4 pt-4">
+          {filtrado ? (
+            <EmptyPorFiltro filtros={filtrosAtivos ?? []} onLimpar={onLimparFiltros} />
+          ) : (
+            <p className="text-sm text-text-muted">
+              {t("Nenhum lead nesta pipeline ainda.")}
+            </p>
+          )}
+        </div>
+      )}
       {/* UM contêiner de rolagem só, nos dois eixos. Rolar cada coluna por
           conta própria seria o desenho "Trello", mas o @hello-pangea/dnd não
           suporta Droppable rolável dentro de outro contêiner rolável ("nested

@@ -53,25 +53,16 @@ const nextConfig: NextConfig = {
    * operador não tinha como saber que o problema era o build, não o arquivo.
    */
   outputFileTracingIncludes: {
+    // @swc/helpers é necessário de forma transversal no standalone.
     "/**": [
       "./node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/**",
-      // Mesmo defeito do @swc/helpers acima: js-binding.js do @napi-rs/canvas
-      // resolve o binário nativo com `require()` computado em runtime
-      // (process.platform/isMusl()), então o tracer não o segue e o
-      // standalone sobe sem o binário — pdfjs-dist quebra no import com
-      // "DOMMatrix is not defined" (lib/ai/rag/extractors/pdf.ts).
-      //
-      // São DOIS padrões, e o motivo de não ser um `@napi-rs/**` só está
-      // medido: dentro de `@napi-rs/` o pnpm põe, ao lado do pacote real, um
-      // SYMLINK por plataforma (`canvas-linux-x64-gnu` ->
-      // `../../../@napi-rs+canvas-linux-x64-gnu@…`). O glob casa o symlink, o
-      // Turbopack tenta lê-lo como arquivo para calcular o hash do
-      // `.nft.json`, e o build morre com `Is a directory (os error 21)` —
-      // não no import, no EMIT. Apontando para o conteúdo de cada pacote em
-      // vez de para o diretório que os agrega, nenhum symlink é visitado.
+    ],
+    // pdfjs/canvas são pesados e só precisam ser forçados para a função que
+    // valida/extrai documentos no upload. Mantê-los em "/**" replica dezenas
+    // de MB em cada função da Vercel e multiplica o Functions Storage.
+    "/api/v1/ai/knowledge/sources/upload": [
       "./node_modules/.pnpm/@napi-rs+canvas@*/node_modules/@napi-rs/canvas/**",
       "./node_modules/.pnpm/@napi-rs+canvas-*/node_modules/@napi-rs/*/*.node",
-      // pdfjs-dist em si (ver comentário acima).
       "./node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/**",
     ],
   },

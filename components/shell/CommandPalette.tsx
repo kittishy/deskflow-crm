@@ -250,7 +250,7 @@ function Resultados({ aoEscolher }: { aoEscolher: () => void }) {
                         onMouseEnter={() => setDestacado(idxGlobal)}
                         onClick={() => navegar(d)}
                         className={cn(
-                          "group flex cursor-pointer items-start gap-3 rounded-lg border border-border/50 p-2.5 transition-all",
+                          "group flex cursor-pointer items-start gap-3 rounded-lg border border-border/50 p-2.5 transition-colors",
                           ativo
                             ? "border-primary/40 bg-accent text-accent-foreground shadow-xs ring-1 ring-primary/20"
                             : "hover:border-border hover:bg-muted/50",

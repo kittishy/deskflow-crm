@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { X } from "lucide-react"
+import { X } from "@/lib/ui/icons"
 
 import { cn } from "@/lib/utils"
 import { useT } from "@/hooks/i18n/useT"
